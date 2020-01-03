@@ -62,6 +62,10 @@ LogWriterFile::LogWriterFile(size_t buffer_size)
 		perf_alloc(PC_ELAPSED, "logger_sd_write"), perf_alloc(PC_ELAPSED, "logger_sd_fsync")},
 
 	{
+		1024,
+		perf_alloc(PC_ELAPSED, "logger_sd_write_dglog"), perf_alloc(PC_ELAPSED, "logger_sd_fsync_dglog")},	//add by cyj, 191017
+
+	{
 		300, // buffer size for the mission log (can be kept fairly small)
 		perf_alloc(PC_ELAPSED, "logger_sd_write_mission"), perf_alloc(PC_ELAPSED, "logger_sd_fsync_mission")}
 }
@@ -83,18 +87,6 @@ LogWriterFile::~LogWriterFile()
 
 void LogWriterFile::start_log(LogType type, const char *filename)
 {
-	// At this point we don't expect the file to be open, but it can happen for very fast consecutive stop & start
-	// calls. In that case we wait for the thread to close the file first.
-	lock();
-
-	while (_buffers[(int)type].fd() >= 0) {
-		unlock();
-		system_usleep(5000);
-		lock();
-	}
-
-	unlock();
-
 	if (type == LogType::Full) {
 		// register the current file with the hardfault handler: if the system crashes,
 		// the hardfault handler will append the crash log to that file on the next reboot.
@@ -161,7 +153,7 @@ int LogWriterFile::thread_start()
 	param.sched_priority = SCHED_PRIORITY_DEFAULT - 40;
 	(void)pthread_attr_setschedparam(&thr_attr, &param);
 
-	pthread_attr_setstacksize(&thr_attr, PX4_STACK_ADJUSTED(1170));
+	pthread_attr_setstacksize(&thr_attr, PX4_STACK_ADJUSTED(1150));
 
 	int ret = pthread_create(&_thread, &thr_attr, &LogWriterFile::run_helper, this);
 	pthread_attr_destroy(&thr_attr);
@@ -378,6 +370,8 @@ const char *log_type_str(LogType type)
 	case LogType::Full: return "full";
 
 	case LogType::Mission: return "mission";
+
+	case LogType::DgMessage: return "dgMessage";  //add by cyj, 191017
 
 	case LogType::Count: break;
 	}

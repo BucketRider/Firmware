@@ -145,6 +145,8 @@ struct Parameters {
 	float battery_a_per_v;
 	int32_t battery_source;
 	int32_t battery_adc_channel;
+	int32_t battery_n_cells;
+	float battery_warning_v_dg;
 
 	float baro_qnh;
 
@@ -227,6 +229,8 @@ struct ParameterHandles {
 	param_t battery_a_per_v;
 	param_t battery_source;
 	param_t battery_adc_channel;
+	param_t battery_n_cells;
+	param_t battery_warning_v_dg;
 
 	param_t board_rotation;
 

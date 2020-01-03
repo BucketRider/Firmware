@@ -18,6 +18,7 @@ serial_config:
         # 2: Board-specific / no fixed function or port
         default: [TEL1, "", ""]
       num_instances: *max_num_config_instances
+
 parameters:
     - group: MAVLink
       definitions:
@@ -27,6 +28,7 @@ parameters:
                 long: |
                     The MAVLink Mode defines the set of streamed messages (for example the
                     vehicle's attitude) and their sending rates.
+
             type: enum
             values:
                 0: Normal
@@ -49,9 +51,16 @@ parameters:
                     Configure the maximum sending rate for the MAVLink streams in Bytes/sec.
                     If the configured streams exceed the maximum rate, the sending rate of
                     each stream is automatically decreased.
+<<<<<<< HEAD
                     If this is set to 0 a value of half of the theoretical maximum bandwidth is used.
                     This corresponds to baudrate/20 Bytes/s (baudrate/10 = maximum data rate on 
                     8N1-configured links).
+=======
+
+                    If this is set to 0, a value of <baudrate>/20 is used, which corresponds to
+                    half of the theoretical maximum bandwidth.
+
+>>>>>>> DGXY
             type: int32
             min: 0
             unit: B/s
@@ -65,9 +74,12 @@ parameters:
                 long: |
                     If enabled, forward incoming MAVLink messages to other MAVLink ports if the
                     message is either broadcast or the target is not the autopilot.
+
                     This allows for example a GCS to talk to a camera that is connected to the
                     autopilot via MAVLink (on a different link than the GCS).
+
             type: boolean
             reboot_required: true
             num_instances: *max_num_config_instances
             default: [true, false, false]
+

@@ -73,7 +73,6 @@ typedef enum {
 	ARM_REQ_MISSION_BIT = (1 << 0),
 	ARM_REQ_ARM_AUTH_BIT = (1 << 1),
 	ARM_REQ_GPS_BIT = (1 << 2),
-	ARM_REQ_ESCS_CHECK_BIT = (1 << 3)
 } arm_requirements_t;
 
 extern const char *const arming_state_names[];
@@ -92,10 +91,10 @@ main_state_transition(const vehicle_status_s &status, const main_state_t new_mai
 void enable_failsafe(vehicle_status_s *status, bool old_failsafe, orb_advert_t *mavlink_log_pub, const char *reason);
 
 bool set_nav_state(vehicle_status_s *status, actuator_armed_s *armed, commander_state_s *internal_state,
-		   orb_advert_t *mavlink_log_pub, const link_loss_actions_t data_link_loss_act, const bool mission_finished,
-		   const bool stay_in_failsafe, const vehicle_status_flags_s &status_flags, bool landed,
-		   const link_loss_actions_t rc_loss_act, const int offb_loss_act, const int offb_loss_rc_act,
-		   const int posctl_nav_loss_act);
+           orb_advert_t *mavlink_log_pub, const link_loss_actions_t data_link_loss_act, const bool mission_finished,
+           const bool stay_in_failsafe, const vehicle_status_flags_s &status_flags, bool landed,
+           const link_loss_actions_t rc_loss_act, const int offb_loss_act, const int offb_loss_rc_act,
+           const int posctl_nav_loss_act);
 
 /*
  * Checks the validty of position data aaainst the requirements of the current navigation
@@ -113,7 +112,8 @@ typedef enum LOW_BAT_ACTION {
 	WARNING = 0,		// Warning
 	RETURN = 1,			// Return mode
 	LAND = 2,			// Land mode
-	RETURN_OR_LAND = 3	// Return mode at critically low level, Land mode at current position if reaching dangerously low levels
+    RETURN_OR_LAND = 3,	// Return mode at critically low level, Land mode at current position if reaching dangerously low levels
+    LAND2 = 4       //Warining at critically low level, Land at enmergency.
 } low_battery_action_t;
 
 void battery_failsafe(orb_advert_t *mavlink_log_pub, const vehicle_status_s &status,

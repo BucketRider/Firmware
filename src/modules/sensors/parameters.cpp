@@ -147,6 +147,8 @@ void initialize_parameter_handles(ParameterHandles &parameter_handles)
 	parameter_handles.battery_a_per_v = param_find("BAT_A_PER_V");
 	parameter_handles.battery_source = param_find("BAT_SOURCE");
 	parameter_handles.battery_adc_channel = param_find("BAT_ADC_CHANNEL");
+	parameter_handles.battery_n_cells = param_find("BAT_N_CELLS");
+	parameter_handles.battery_warning_v_dg = param_find("BAT_V_WARNING_DG");
 
 	/* rotations */
 	parameter_handles.board_rotation = param_find("SENS_BOARD_ROT");
@@ -428,6 +430,15 @@ int update_parameters(const ParameterHandles &parameter_handles, Parameters &par
 
 	param_get(parameter_handles.battery_source,      &(parameters.battery_source));
 	param_get(parameter_handles.battery_adc_channel, &(parameters.battery_adc_channel));
+	
+	if (param_get(parameter_handles.battery_warning_v_dg, &(parameters.battery_warning_v_dg)) != OK) {
+		PX4_WARN("%s", paramerr);
+
+	} else if (parameters.battery_warning_v_dg < 0.0f) {
+		parameters.battery_warning_v_dg = 3.6f;
+		param_set_no_notification(parameter_handles.battery_warning_v_dg, &parameters.battery_warning_v_dg);
+	}
+	param_get(parameter_handles.battery_n_cells, &(parameters.battery_n_cells));
 
 	param_get(parameter_handles.board_rotation, &(parameters.board_rotation));
 

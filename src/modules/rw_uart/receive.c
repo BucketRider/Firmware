@@ -46,50 +46,75 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
     case 8:
         paramf = (float_t)data / 510.0;
         param_set(msg_hd.roll_p_hd, &paramf);
+        param_set(msg_hd.pitch_p_hd, &paramf);
         //printf("Passing change\n");
         break;
     case 9:
-        paramf = (float_t)data / 5100.0;
+        paramf = (float_t)data / 2550.0;
         param_set(msg_hd.roll_i_hd, &paramf);
+        param_set(msg_hd.pitch_i_hd, &paramf);
         break;
     case 10:
         paramf = (float_t)data / 25500.0;
         param_set(msg_hd.roll_d_hd, &paramf);
-        break;
-    case 11:
-        paramf = (float_t)data / 510.0;
-        param_set(msg_hd.pitch_p_hd, &paramf);
-        break;
-    case 12:
-        paramf = (float_t)data / 5100.0;
-        param_set(msg_hd.pitch_i_hd, &paramf);
-        break;
-    case 13:
-        paramf = (float_t)data / 25500.0;
         param_set(msg_hd.pitch_d_hd, &paramf);
         break;
+    case 11:
+        //paramf = (float_t)data / 510.0;
+        //param_set(msg_hd.pitch_p_hd, &paramf);
+        paramf = (float_t)data / 2834.0 +0.06;
+        param_set(msg_hd.hor_p_hd, &paramf);
+        break;
+    case 12:
+        //paramf = (float_t)data / 2550.0;
+        //param_set(msg_hd.pitch_i_hd, &paramf);
+        paramf = (float_t)data / 255.0 * 3.0;
+        param_set(msg_hd.hor_i_hd, &paramf);
+        break;
+    case 13:
+        //paramf = (float_t)data / 25500.0;
+        //param_set(msg_hd.pitch_d_hd, &paramf);
+        paramf = (float_t)data / 2684.0 +0.005;
+        param_set(msg_hd.hor_d_hd, &paramf);
+        break;
     case 14:
-        paramf = (float_t)data / 510.0;
-        param_set(msg_hd.yaw_p_hd, &paramf);
+        //paramf = (float_t)data / 510.0;
+        //param_set(msg_hd.yaw_p_hd, &paramf);
+        paramf = (float_t)data / 850.0 + 0.1;
+        param_set(msg_hd.ver_p_hd, &paramf);
         break;
     case 15:
-        paramf = (float_t)data / 1275.0;
-        param_set(msg_hd.yaw_i_hd, &paramf);
+        //paramf = (float_t)data / 1275.0;
+        //param_set(msg_hd.yaw_i_hd, &paramf);
+        paramf = (float_t)data / 2834.0 +0.01;
+        param_set(msg_hd.ver_i_hd, &paramf);
         break;
     case 16:
-        paramf = (float_t)data / 25500.0;
-        param_set(msg_hd.roll_d_hd, &paramf);
+        //paramf = (float_t)data / 25500.0;
+        //param_set(msg_hd.yaw_d_hd, &paramf);
+        paramf = (float_t)data / 2550.0;
+        param_set(msg_hd.ver_d_hd, &paramf);
         break;
     case 17:
-        paramf = (float_t)data / 170.0;
+        paramf = (float_t)data / 255.0;
+        param_set(msg_hd.throttle_hd, &paramf);
+        break;
+    case 19:
+        paramf = (float_t)data / 255.0 *2.0;
+        param_set(msg_hd.xy_p_hd, &paramf);
+        break;
+    case 20:
+        paramf = (float_t)data / 255.0 *1.5;
         param_set(msg_hd.z_p_hd, &paramf);
         break;
     case 21:
-        paramf = (float_t)data / 34.0 + 0.5;
+        //paramf = (float_t)data / 34.0 + 0.5;
+        paramf = (float_t)data / 10.0;
         param_set(msg_hd.up_vel_max_hd, &paramf);
         break;
     case 22:
-        paramf = (float_t)data / 15.0 + 3.0;
+        //paramf = (float_t)data / 15.0 + 3.0;
+        paramf = (float_t)data / 10.0;
         param_set(msg_hd.xy_vel_max_hd, &paramf);
         break;
     case 23:
@@ -111,17 +136,22 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
     case 28:
         paramf = (float_t)data;
         param_set(msg_hd.yaw_max_hd, &paramf);
+        param_set(msg_hd.yaw_fast_hd, &paramf);
         break;
     case 29:
-        paramf = (float_t)data / 2.84;
-        param_set(msg_hd.roll_max_hd, &paramf);
+//        paramf = (float_t)data;
+//        param_set(msg_hd.roll_max_hd, &paramf);
+        paramf = (float_t)data/255.0 *12.0;
+        param_set(msg_hd.att_p_hd, &paramf);
+        param_set(msg_hd.att_r_hd, &paramf);
         break;
     case 30:
-        paramf = (float_t)data / 1.59 + 20.0;
+        paramf = (float_t)data;
         param_set(msg_hd.pitch_max_hd, &paramf);
+        param_set(msg_hd.roll_max_hd, &paramf);
         break;
     case 33:
-        paramf = (float_t)data / 19.61 + 2.0;
+        paramf = (float_t)data / 17;
         param_set(msg_hd.acc_hor_max_hd, &paramf);
         break;
     case 38:
@@ -133,14 +163,19 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
         param_set(msg_hd.battery_n_cells_hd, &paramd);
         break;
     case 40:
-        paramf = ((float_t)((data & 0x0c)/4) + 1.2) * 0.05/0.55;
+        paramf = ((float_t)((data & 0x0c)>>2)) * 0.05 +3.55;
         //paramf = (float_t)data / 910.8 + 0.12;
-        param_set(msg_hd.battery_warn_hd, &paramf);
+        param_set(msg_hd.battery_crit_hd, &paramf);
+//        paramf =  paramf +0.05;
+//        param_set(msg_hd.battery_warn_hd, &paramf);
         break;
     case 48:
         switch (data & 0x0f) {
         case 0x00:
             paramd = 3;
+            break;
+        case 0x02:
+            paramd = 4;
             break;
         case 0x06:
             paramd = 0;
@@ -149,7 +184,6 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
             paramd = 1;
             break;
         case 0x01:
-        case 0x02:
         case 0x05:
             paramd = 2;
             break;
@@ -176,7 +210,8 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
 //        param_set(msg_hd.rc_lost_act_hd, &paramd);
 //        break;
     case 59:
-        paramf = (float_t)data / 63.75;
+        //paramf = (float_t)data / 63.75;
+        paramf = (float_t)data / 10;
         param_set(msg_hd.dn_vel_max_hd, &paramf);
         break;
     default:
@@ -194,7 +229,7 @@ bool yfwi_param_set(const uint8_t *buffer, MSG_param_hd msg_hd){
     dist_max = ((uint16_t) buffer[32]<< 8) + (uint16_t)buffer[31];
     dist_max_saved = ((uint16_t) param_saved[32]<< 8) + (uint16_t)param_saved[31];
     if(dist_max != dist_max_saved) {
-        float_t paramf = (float_t)dist_max / 6.5535;
+        float_t paramf = (float_t)dist_max ;
         param_set(msg_hd.higt_max_hd, &paramf);
         changed = true;
     }
@@ -202,7 +237,7 @@ bool yfwi_param_set(const uint8_t *buffer, MSG_param_hd msg_hd){
     dist_max = ((uint16_t) buffer[35]<< 8) + (uint16_t)buffer[34];
     dist_max_saved = ((uint16_t) param_saved[35]<< 8) + (uint16_t)param_saved[34];
     if(dist_max != dist_max_saved) {
-        float_t paramf = (float_t)dist_max / 6.5535;
+        float_t paramf = (float_t)dist_max;
         param_set(msg_hd.dist_max_hd, &paramf);
         changed = true;
         printf("dist_max changed\n");

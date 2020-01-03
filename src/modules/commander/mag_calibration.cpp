@@ -61,13 +61,14 @@
 #include <parameters/param.h>
 #include <systemlib/err.h>
 #include <uORB/topics/sensor_combined.h>
+#include <mathlib/mathlib.h>
 
 static const char *sensor_name = "mag";
 static constexpr unsigned max_mags = 4;
 static constexpr float mag_sphere_radius = 0.2f;
-static unsigned int calibration_sides = 6;			///< The total number of sides
-static constexpr unsigned int calibration_total_points = 240;		///< The total points per magnetometer
-static constexpr unsigned int calibraton_duration_seconds = 42; 	///< The total duration the routine is allowed to take
+static unsigned int calibration_sides = 4;			///< The total number of sides
+static constexpr unsigned int calibration_total_points = 240;//240		///< The total points per magnetometer
+static constexpr unsigned int calibraton_duration_seconds = 42;//42 	///< The total duration the routine is allowed to take
 
 static constexpr float MAG_MAX_OFFSET_LEN =
 	1.3f;	///< The maximum measurement range is ~1.9 Ga, the earth field is ~0.6 Ga, so an offset larger than ~1.3 Ga means the mag will saturate in some directions.
@@ -77,6 +78,17 @@ bool internal[max_mags];
 int device_prio_max = 0;
 int32_t device_id_primary = 0;
 static unsigned _last_mag_progress = 0;
+//mag_calib_dgx
+//float mag_data_lpf[3]= {};
+//float sphere_dg_x[3] = {};
+//float sphere_dg_y[3] = {};
+//float sphere_dg_z[3] = {};
+//float sphere_min_x[3] ={};
+//float sphere_min_y[3] ={};
+//float sphere_min_z[3] ={};
+//float sphere_max_x[3] ={};
+//float sphere_max_y[3] ={};
+//float sphere_max_z[3] ={};
 
 calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub);
 
@@ -101,12 +113,12 @@ int do_mag_calibration(orb_advert_t *mavlink_log_pub)
 	calibration_log_info(mavlink_log_pub, CAL_QGC_STARTED_MSG, sensor_name);
 
 	struct mag_calibration_s mscale_null;
-	mscale_null.x_offset = 0.0f;
-	mscale_null.x_scale = 1.0f;
-	mscale_null.y_offset = 0.0f;
-	mscale_null.y_scale = 1.0f;
-	mscale_null.z_offset = 0.0f;
-	mscale_null.z_scale = 1.0f;
+    mscale_null.x_offset = 0.0f;
+    mscale_null.x_scale = 1.0f;
+    mscale_null.y_offset = 0.0f;
+    mscale_null.y_scale = 1.0f;
+    mscale_null.z_offset = 0.0f;
+    mscale_null.z_scale = 1.0f;
 
 	int result = PX4_OK;
 
@@ -149,7 +161,7 @@ int do_mag_calibration(orb_advert_t *mavlink_log_pub)
 		(void)sprintf(str, "CAL_MAG%u_ID", cur_mag);
 		result = param_set_no_notification(param_find(str), &(device_ids[cur_mag]));
 
-		if (result != PX4_OK) {
+        if (result != PX4_OK) {
 			calibration_log_info(mavlink_log_pub, "[cal] Unable to reset CAL_MAG%u_ID", cur_mag);
 			break;
 		}
@@ -359,6 +371,14 @@ static calibrate_return mag_calibration_worker(detect_orientation_return orienta
 	calibration_log_info(worker_data->mavlink_log_pub, "[cal] Continue rotation for %s %u s",
 			     detect_orientation_str(orientation), worker_data->calibration_interval_perside_seconds);
 
+    if (orientation == DETECT_ORIENTATION_UPSIDE_DOWN || orientation == DETECT_ORIENTATION_RIGHTSIDE_UP ){
+        rgbled_set_color_and_mode(led_control_s::COLOR_GREEN, led_control_s::MODE_ON);
+    }else if (orientation == DETECT_ORIENTATION_TAIL_DOWN || orientation == DETECT_ORIENTATION_NOSE_DOWN ){
+        rgbled_set_color_and_mode(led_control_s::COLOR_YELLOW, led_control_s::MODE_ON);
+    }else if (orientation == DETECT_ORIENTATION_LEFT || orientation == DETECT_ORIENTATION_RIGHT ){
+        rgbled_set_color_and_mode(led_control_s::COLOR_BLUE, led_control_s::MODE_ON);
+    }
+
 	/*
 	 * Detect if the system is rotating.
 	 *
@@ -461,9 +481,9 @@ static calibrate_return mag_calibration_worker(detect_orientation_return orienta
 				prev_count[cur_mag] = worker_data->calibration_counter_total[cur_mag];
 
 				if (worker_data->sub_mag[cur_mag] >= 0) {
-					struct mag_report mag;
+                    struct mag_report mag;
 
-					orb_copy(ORB_ID(sensor_mag), worker_data->sub_mag[cur_mag], &mag);
+                    orb_copy(ORB_ID(sensor_mag), worker_data->sub_mag[cur_mag], &mag);
 
 					// Check if this measurement is good to go in
 					rejected = rejected || reject_sample(mag.x, mag.y, mag.z,
@@ -471,9 +491,9 @@ static calibrate_return mag_calibration_worker(detect_orientation_return orienta
 									     worker_data->calibration_counter_total[cur_mag],
 									     calibration_sides * worker_data->calibration_points_perside);
 
-					worker_data->x[cur_mag][worker_data->calibration_counter_total[cur_mag]] = mag.x;
-					worker_data->y[cur_mag][worker_data->calibration_counter_total[cur_mag]] = mag.y;
-					worker_data->z[cur_mag][worker_data->calibration_counter_total[cur_mag]] = mag.z;
+                    worker_data->x[cur_mag][worker_data->calibration_counter_total[cur_mag]] = mag.x;
+                    worker_data->y[cur_mag][worker_data->calibration_counter_total[cur_mag]] = mag.y;
+                    worker_data->z[cur_mag][worker_data->calibration_counter_total[cur_mag]] = mag.z;
 					worker_data->calibration_counter_total[cur_mag]++;
 				}
 			}
@@ -707,6 +727,21 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 	float offdiag_y[max_mags];
 	float offdiag_z[max_mags];
 
+    float diag_dg_x[max_mags];
+    float diag_dg_y[max_mags];
+    float diag_dg_z[max_mags];
+    float sphere_dg_x[max_mags];
+    float sphere_dg_y[max_mags];
+    float sphere_dg_z[max_mags];
+    float sphere_min_x[max_mags];
+    float sphere_min_y[max_mags];
+    float sphere_min_z[max_mags];
+    float sphere_max_x[max_mags];
+    float sphere_max_y[max_mags];
+    float sphere_max_z[max_mags];
+
+
+
 	for (unsigned cur_mag = 0; cur_mag < max_mags; cur_mag++) {
 		sphere_x[cur_mag] = 0.0f;
 		sphere_y[cur_mag] = 0.0f;
@@ -718,6 +753,19 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 		offdiag_x[cur_mag] = 0.0f;
 		offdiag_y[cur_mag] = 0.0f;
 		offdiag_z[cur_mag] = 0.0f;
+
+        diag_dg_x[cur_mag] = 1.0f;
+        diag_dg_y[cur_mag] = 1.0f;
+        diag_dg_z[cur_mag] = 1.0f;
+        sphere_dg_x[cur_mag] = 0.0f;
+        sphere_dg_y[cur_mag] = 0.0f;
+        sphere_dg_z[cur_mag] = 0.0f;
+        sphere_min_x[cur_mag] = 0.0f;
+        sphere_min_y[cur_mag] = 0.0f;
+        sphere_min_z[cur_mag] = 0.0f;
+        sphere_max_x[cur_mag] = 0.0f;
+        sphere_max_y[cur_mag] = 0.0f;
+        sphere_max_z[cur_mag] = 0.0f;
 	}
 
 	// Sphere fit the data to get calibration values
@@ -739,6 +787,49 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 								  diag_x[cur_mag], diag_y[cur_mag], diag_z[cur_mag],
 								  offdiag_x[cur_mag], offdiag_y[cur_mag], offdiag_z[cur_mag],
 								  mavlink_log_pub, cur_mag);
+                // mag_calib_dgx
+                    for (size_t i = 0; i < worker_data.calibration_counter_total[cur_mag]; i++)
+                    {
+//                        float x = worker_data.x[cur_mag][i];
+//                        float y = worker_data.y[cur_mag][i];
+//                        float z = worker_data.z[cur_mag][i];
+//                        printf("%8.4f, %8.4f, %8.4f\n", (double)x, (double)y, (double)z);
+                        if( worker_data.x[cur_mag][i] < sphere_min_x[cur_mag]){
+                            sphere_min_x[cur_mag] =  worker_data.x[cur_mag][i];
+                        }else if( worker_data.x[cur_mag][i] > sphere_max_x[cur_mag]){
+                            sphere_max_x[cur_mag] =  worker_data.x[cur_mag][i];
+
+                        }else if( worker_data.y[cur_mag][i] < sphere_min_y[cur_mag]){
+                            sphere_min_y[cur_mag] =  worker_data.y[cur_mag][i];
+                        }else if( worker_data.y[cur_mag][i] > sphere_max_y[cur_mag]){
+                            sphere_max_y[cur_mag] =  worker_data.y[cur_mag][i];
+
+                        }else if( worker_data.z[cur_mag][i] < sphere_min_z[cur_mag]){
+                            sphere_min_z[cur_mag] =  worker_data.z[cur_mag][i];
+                        }else if( worker_data.z[cur_mag][i] > sphere_max_z[cur_mag]){
+                            sphere_max_z[cur_mag] =  worker_data.z[cur_mag][i];
+
+                        }else if( worker_data.x[cur_mag][i] < sphere_min_x[cur_mag]){
+                            sphere_min_x[cur_mag] =  worker_data.x[cur_mag][i];
+                        }else if( worker_data.x[cur_mag][i] > sphere_max_x[cur_mag]){
+                            sphere_max_x[cur_mag] =  worker_data.x[cur_mag][i];
+                        }
+                    }           
+
+                    diag_dg_x[cur_mag] = (sphere_max_y[cur_mag] - sphere_min_y[cur_mag]) / (sphere_max_x[cur_mag] - sphere_min_x[cur_mag]);
+                    diag_dg_y[cur_mag] = (sphere_max_x[cur_mag] - sphere_min_x[cur_mag]) / (sphere_max_y[cur_mag] - sphere_min_y[cur_mag]);
+                    diag_dg_z[cur_mag] = (sphere_max_x[cur_mag] - sphere_min_x[cur_mag]) / (sphere_max_z[cur_mag] - sphere_min_z[cur_mag]);
+
+                    sphere_dg_x[cur_mag] = diag_dg_x[cur_mag] * (1 / 2 *(sphere_max_x[cur_mag] - sphere_min_x[cur_mag]) - sphere_max_x[cur_mag]); //(sphere_max_x[cur_mag] + sphere_min_x[cur_mag]) / 2.0f ;
+                    sphere_dg_y[cur_mag] = diag_dg_y[cur_mag] * (1 / 2 *(sphere_max_y[cur_mag] - sphere_min_y[cur_mag]) - sphere_max_y[cur_mag]); //(sphere_max_y[cur_mag] + sphere_min_y[cur_mag]) / 2.0f ;
+                    sphere_dg_z[cur_mag] = diag_dg_z[cur_mag] * (1 / 2 *(sphere_max_z[cur_mag] - sphere_min_z[cur_mag]) - sphere_max_z[cur_mag]); //(sphere_max_z[cur_mag] + sphere_min_z[cur_mag]) / 2.0f ;
+
+                       sphere_dg_x[cur_mag] = sphere_dg_x[cur_mag];
+                       sphere_dg_y[cur_mag] = sphere_dg_y[cur_mag];
+                       sphere_dg_z[cur_mag] = sphere_dg_z[cur_mag];
+                       diag_dg_x[cur_mag] = diag_dg_x[cur_mag];
+                       diag_dg_y[cur_mag] = diag_dg_y[cur_mag];
+                       diag_dg_z[cur_mag] = diag_dg_z[cur_mag];
 
 				if (result == calibrate_return_error) {
 					break;
@@ -746,6 +837,9 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 			}
 		}
 	}
+
+
+
 
 	// Print uncalibrated data points
 	if (result == calibrate_return_ok) {
@@ -830,12 +924,18 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 #endif
 
 				if (result == calibrate_return_ok) {
-					mscale.x_offset = sphere_x[cur_mag];
-					mscale.y_offset = sphere_y[cur_mag];
-					mscale.z_offset = sphere_z[cur_mag];
-					mscale.x_scale = diag_x[cur_mag];
-					mscale.y_scale = diag_y[cur_mag];
-					mscale.z_scale = diag_z[cur_mag];
+                    mscale.x_offset = sphere_x[cur_mag];
+                    mscale.y_offset = sphere_y[cur_mag];
+                    mscale.z_offset = sphere_z[cur_mag];
+                    mscale.x_scale = diag_x[cur_mag];
+                    mscale.y_scale = diag_y[cur_mag];
+                    mscale.z_scale = diag_z[cur_mag];
+//                    mscale.x_offset = sphere_dg_x[cur_mag];
+//                    mscale.y_offset = sphere_dg_y[cur_mag];
+//                    mscale.z_offset = sphere_dg_z[cur_mag];
+//                    mscale.x_scale = diag_dg_x[cur_mag];
+//                    mscale.y_scale = diag_dg_y[cur_mag];
+//                    mscale.z_scale = diag_dg_z[cur_mag];
 
 #ifdef __PX4_NUTTX
 
@@ -880,7 +980,7 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 					failed |= (PX4_OK != param_set_no_notification(param_find(str), &(mscale.z_scale)));
 #endif
 
-					if (failed) {
+                    if (failed) {
 						calibration_log_critical(mavlink_log_pub, CAL_ERROR_SET_PARAMS_MSG, cur_mag);
 						result = calibrate_return_error;
 
@@ -901,6 +1001,5 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub)
 		// system updates
 		(void)param_set(param_find("CAL_MAG_PRIME"), &(device_id_primary));
 	}
-
 	return result;
 }

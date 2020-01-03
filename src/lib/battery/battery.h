@@ -104,7 +104,8 @@ private:
 		(ParamFloat<px4::params::BAT_R_INTERNAL>) _param_bat_r_internal,
 		(ParamFloat<px4::params::BAT_LOW_THR>) _param_bat_low_thr,
 		(ParamFloat<px4::params::BAT_CRIT_THR>) _param_bat_crit_thr,
-		(ParamFloat<px4::params::BAT_EMERGEN_THR>) _param_bat_emergen_thr
+        (ParamFloat<px4::params::BAT_EMERGEN_THR>) _param_bat_emergen_thr,
+        (ParamFloat<px4::params::BAT_V_WARNING_DG>) _param_bat_v_warning_dg
 	)
 
 	bool _battery_initialized = false;

@@ -52,7 +52,7 @@ uint8_t get_control_status(uint16_t command, uint8_t nav_state){
         case 0://NAVIGATION_STATE_MANUAL :
             return 0;
             break;
-        case 4: //NAVIGATION_STATE_AUTO_LOITER :
+        case 4://NAVIGATION_STATE_AUTO_LOITER :
             return 1;
             break;
         case 3: //NAVIGATION_STATE_AUTO_MISSION :
@@ -83,18 +83,27 @@ uint8_t get_control_status(uint16_t command, uint8_t nav_state){
  }
 }
 
-uint8_t get_warnning (bool geofence_violated, uint8_t warning ){
+uint8_t get_warnning (bool geofence_violated, uint8_t warning, bool rc_lost ){
     uint8_t result = 0x00;
-    if (warning >0){
-        result |=0x03;
+    if (warning >= 1){
+        result |=0x01;
+    }
+    if (warning == 3){
+        result |=0x02;
     }
     if (geofence_violated == true){
         result |=0x0c;
+    }
+    if (rc_lost == true){
+        result |=0x10;
     }
     return result;
 }
 
 void stp_pack (STP *stp, MSG_orb_data stp_data){
+
+    param_t param_hd;
+    float paramf;
 
     stp->head[0] = '$';
     stp->head[1] = 'S';
@@ -113,44 +122,56 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->gps_wp_latitude = (stp_data.command_data.command == 16) ? (float_t)stp_data.command_data.param5 : NAN;
     stp->gps_wp_longitude = (stp_data.command_data.command == 16) ? (float_t)stp_data.command_data.param6 : NAN;
 
-    stp->wp_num = (uint8_t)stp_data.mission_data.seq_total;
-    stp->mission_num = (uint8_t)stp_data.mission_data.seq_current;
+    stp->wp_seq_low = (uint8_t)((stp_data.mission_data.seq_current+1) & 0x00ff);
+    stp->wp_seq_high = (uint8_t)(((stp_data.mission_data.seq_current & 0xff00) +1) >> 8);
+    stp->wp_total = (uint16_t)stp_data.mission_data.seq_total;
 
-    stp->control_status = get_control_status (stp_data.command_data.command, stp_data.status_data.nav_state);
+    if ((stp_data.status_data.nav_state == 2 ||  stp_data.status_data.nav_state == 4)
+             && stp_data.manual_data.mode_slot == 5)
+        stp->control_status = 0x0c;
+    else if ((stp_data.status_data.nav_state == 2 ||  stp_data.status_data.nav_state == 4)
+         && stp_data.manual_data.mode_switch == 2)
+        stp->control_status = 0x02;
+    else
+        stp->control_status = get_control_status (stp_data.command_data.command, stp_data.status_data.nav_state);
 
     stp->rc_yaw = (uint8_t)(stp_data.manual_data.r * 50.0 + 150.0);
     stp->rc_y = (uint8_t)(stp_data.manual_data.y * 50.0 +150.0 );
     stp->rc_x = (uint8_t)(-stp_data.manual_data.x * 50.0 + 150.0);
     stp->rc_z = (uint8_t)((1-stp_data.manual_data.z) * 200.0);
 
-    if (stp_data.status_data.nav_state < 3 /*NAVIGATION_STATE_MANUAL*/ ){
+    if (stp_data.status_data.nav_state  == 0 /*NAVIGATION_STATE_MANUAL*/ ){
         stp->sp_yaw = stp->rc_yaw;
         stp->sp_y = stp->rc_y;
         stp->sp_x = stp->rc_x;
         stp->sp_z = stp->rc_z;
     }
     else {
-         stp->sp_yaw =(uint8_t)(stp_data.local_position_sp_data.yawspeed/45.0 * 50.0 + 150.0);
-         stp->sp_y = (uint8_t)(stp_data.local_position_sp_data.thrust[1] * 50.0 + 150.0);
-         stp->sp_x = (uint8_t)(stp_data.local_position_sp_data.thrust[0] * 50.0 + 150.0);
-         //stp->sp_z = (uint8_t)(stp_data.local_position_sp_data.thrust[2] * 50.0 + 150.0);
-         stp->sp_z = (uint8_t)(-stp_data.local_position_sp_data.thrust[2] * 200);
-    }
-    stp->local_vz_sp = (int16_t)(stp_data.local_position_sp_data.vz * 100.0);
-    stp->local_z_sp = (int16_t)(stp_data.local_position_sp_data.z * 10.0);
+        param_hd = param_find("MPC_TILTMAX_AIR");
+        param_get(param_hd, &paramf);
+        stp->sp_y =(uint8_t)(stp_data.attitude_sp_data.roll_body *57.3/paramf* 50.0 + 150.0);
+        stp->sp_x =(uint8_t)(stp_data.attitude_sp_data.pitch_body *57.3/paramf* 50.0 + 150.0);
+        stp->sp_z = stp_data.arm_data.armed ? (uint8_t)((1+ stp_data.attitude_sp_data.thrust_body[2])* 200.0) : (uint8_t)200;
+        param_hd = param_find("MC_YAWRATE_MAX");
+        param_get(param_hd, &paramf);
+        stp->sp_yaw =(uint8_t)(stp_data.attitude_sp_data.yaw_sp_move_rate*57.3/paramf* 50.0 + 150.0);
+        }
 
-    float_t distance = (float_t) sqrtl(stp_data.local_position_data.z * stp_data.local_position_data.z + stp_data.local_position_data.x * stp_data.local_position_data.x
-                             + stp_data.local_position_data.y * stp_data.local_position_data.y);
+    stp->local_z_sp = -(int16_t)((stp_data.local_position_sp_data.z - stp_data.home_position_data.z)* 10.0) ;
+
+    float_t distance = (float_t) sqrtl((stp_data.local_position_data.z- stp_data.home_position_data.z) * (stp_data.local_position_data.z - stp_data.home_position_data.z)
+                                                  + (stp_data.local_position_data.x - stp_data.home_position_data.x)* (stp_data.local_position_data.x - stp_data.home_position_data.x)
+                                                  + (stp_data.local_position_data.y - stp_data.home_position_data.y)* (stp_data.local_position_data.y -  stp_data.home_position_data.y));
     stp->distance_high8 =  (uint8_t)(distance/256.0);
     stp->distance_low8 = (uint8_t)(distance);
     stp->local_vx_high8 = (int8_t)(((int16_t)(stp_data.local_position_data.vx * 100.0) & 0xff00) >> 8);
     stp->local_vx_low8 =  (int8_t)((int16_t)(stp_data.local_position_data.vx * 100.0) & 0x00ff);
-    stp->local_vz_high8 = (int8_t)(((int16_t)(stp_data.local_position_data.vz * 100.0) & 0xff00) >> 8);
-    stp->local_vz_low8 =  (int8_t)((int16_t)(stp_data.local_position_data.vz * 100.0) & 0x00ff);
+    stp->local_vz_high8 = (int8_t)(((int16_t)(-stp_data.local_position_data.vz * 100.0) & 0xff00) >> 8);
+    stp->local_vz_low8 =  (int8_t)((int16_t)(-stp_data.local_position_data.vz * 100.0) & 0x00ff);
     stp->local_vy_high8 = (int8_t)(((int16_t)(stp_data.local_position_data.vy * 100.0) & 0xff00) >> 8);
     stp->local_vy_low8 =  (int8_t)((int16_t)(stp_data.local_position_data.vy * 100.0) & 0x00ff);
     stp->receiver_status = (uint8_t)(stp_data.status_data.nav_state > 2 /*NAVIGATION_STATE_POSCTL*/ );
-    stp->photo_num = 0;
+    stp->photo_num = stp_data.home_position_data.valid_alt && stp_data.home_position_data.valid_hpos;  //home available
     stp->acc_right = (int16_t)(-stp_data.local_position_data.ay *100.0);
     stp->acc_back = (int16_t)(-stp_data.local_position_data.ax *100.0);
     stp->acc_down = (int16_t)(-stp_data.local_position_data.az *100.0);
@@ -169,46 +190,56 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->gps_yaw = atan2f(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3));
 
     stp->rc_throttle_mid = 150;
-    stp->rc_pitch_mid =150;
-    stp->rc_roll_mid =150;
-    stp->rc_yaw_mid =150;
-    stp->version =1000;
+    stp->rc_pitch_mid = 150;
+    stp->rc_roll_mid = 150;
+    stp->rc_yaw_mid = 150;
+
+    stp->version = DG_VERSION;
     stp->sum_check=0x00;
 
-    stp->local_z_pressure =  (int16_t)(stp_data.air_data.baro_alt_meter * 10.0);
+    //stp->local_z_pressure =  (int16_t)(stp_data.air_data.baro_alt_meter * 10.0);
+    stp->local_z_pressure =  -(int16_t)((stp_data.local_position_data.z - stp_data.home_position_data.z) * 10.0);
     stp->temprature = (int8_t)(stp_data.air_data.baro_temp_celcius);
 
-    stp->battery_voltage = (uint16_t)(stp_data.battery_data.voltage_filtered_v/25.0 * 4096.0);
+    stp->battery_voltage = (uint16_t)(stp_data.battery_data.voltage_filtered_v/20.0 * 4096.0);
     stp->battery_usage = (uint16_t)(stp_data.battery_data.discharged_mah);
     stp->battery_current = (uint8_t)(stp_data.battery_data.current_filtered_a);
 
-    stp->skyway_state = (stp_data.status_data.nav_state < 3) ? 0x00 : 0x06;
+    stp->skyway_state = (stp_data.status_data.nav_state != 3) ? 0x00 : 0x06;
     if(stp_data.mission_data.finished == true) stp->skyway_state |= 0x80;
     else stp->skyway_state &= 0x7f;
     if (param_saved[18] == 3) stp->skyway_state &= 0xfe;
     else stp->skyway_state |= 0x01;
 
-    stp->warnning = get_warnning(stp_data.geofence_data.geofence_violated, stp_data.battery_data.warning);
+//    stp->warnning = get_warnning(stp_data.geofence_data.geofence_violated, stp_data.battery_data.warning,
+//                                                stp_data.status_data.rc_signal_lost);
+       stp->warnning = get_warnning(stp_data.geofence_data.geofence_violated, stp_data.dg_voltage_data.warning,
+                                                   stp_data.status_data.rc_signal_lost);
 
-    //stp->flight_time = (uint16_t)(stp->total_time - stp_data.arm_data.armed_time_ms/1000);
-    stp->flight_time = stp_data.arm_data.armed_time_ms/1000;
+    if (stp_data.arm_data.armed == true){
+        stp->flight_time = (uint16_t)(stp->total_time - stp_data.arm_data.armed_time_ms/1000);
+    }
+    else stp->flight_time =0;
+    //stp->flight_time = stp_data.arm_data.armed_time_ms/1000;
+
     time_t t = stp_data.gps_data.time_utc_usec *1e-6;
     struct tm *lt =localtime(&t);
-    stp->year = lt->tm_year - 100;
-    //printf("year is %d\n", lt->tm_year);
-    stp->month = lt->tm_mon +1;
-    //printf("month is %d\n", lt->tm_mon);
-    stp->day = lt->tm_mday;
-    //printf("day is %d\n", lt->tm_mday);
-    stp->hour =lt->tm_hour;
-    //printf("hour is %d\n", lt->tm_hour);
-    stp->minute = lt->tm_min;
-    //printf("min is %d\n", lt->tm_min);
-    stp->second = lt->tm_sec;
-    //printf("sec is %d\n", lt->tm_sec);
+//    stp->year = lt->tm_year - 100;
+//    //printf("year is %d\n", lt->tm_year);
+//    stp->month = lt->tm_mon +1;
+//    //printf("month is %d\n", lt->tm_mon);
+//    stp->day = lt->tm_mday;
+//    //printf("day is %d\n", lt->tm_mday);
+//    stp->hour =lt->tm_hour;
+//    //printf("hour is %d\n", lt->tm_hour);
+//    stp->minute = lt->tm_min;
+//    //printf("min is %d\n", lt->tm_min);
+//    stp->second = lt->tm_sec;
+//    //printf("sec is %d\n", lt->tm_sec);
 
-    //stp->YMDHM = (lt->tm_year - 100) *1e8 + (tm_mon +1)*1e6 + lt->tm_mday *1e4 + lt->tm_hour *1e2 + lt->tm_min;
-    //stp->MM =  lt->tm_sec * 1000 + (stp_data.gps_data.time_utc_usec /1000) %100;
+    stp->YMDHM = (lt->tm_year - 100) *1e8 + (lt->tm_mon +1)*1e6 + lt->tm_mday *1e4 + lt->tm_hour *1e2 + lt->tm_min;
+    stp->MM =  lt->tm_sec * 1000 + (stp_data.gps_data.time_utc_usec /1000) %100;
+    // printf("%d %d\n", stp->YMDHM,  stp->MM);
 }
 
 void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
@@ -226,29 +257,47 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     param_get(msg_hd.roll_p_hd, &paramf);
     yfpa_param->roll_p = (uint8_t)(paramf * 510.0);
     param_get(msg_hd.roll_i_hd, &paramf);
-    yfpa_param->roll_i = (uint8_t)(paramf * 5100.0);
+    yfpa_param->roll_i = (uint8_t)(paramf * 2550.0);
     param_get(msg_hd.roll_d_hd, &paramf);
     yfpa_param->roll_d = (uint8_t)(paramf * 25500.0);
-    param_get(msg_hd.pitch_p_hd, &paramf);
-    yfpa_param->pitch_p = (uint8_t)(paramf * 510.0);
-    param_get(msg_hd.pitch_i_hd, &paramf);
-    yfpa_param->pitch_i = (uint8_t)(paramf * 5100.0);
-    param_get(msg_hd.pitch_d_hd, &paramf);
-    yfpa_param->pitch_d = (uint8_t)(paramf * 25500.0);
-    param_get(msg_hd.yaw_p_hd, &paramf);
-    yfpa_param->yaw_p = (uint8_t)(paramf *510.0);
-    param_get(msg_hd.yaw_i_hd, &paramf);
-    yfpa_param->yaw_i = (uint8_t)(paramf *1275.0);
-    param_get(msg_hd.yaw_d_hd, &paramf);
-    yfpa_param->yaw_d = (uint8_t)(paramf *25500.0);
+//    param_get(msg_hd.pitch_p_hd, &paramf);
+//    yfpa_param->pitch_p = (uint8_t)(paramf * 510.0);
+//    param_get(msg_hd.pitch_i_hd, &paramf);
+//    yfpa_param->pitch_i = (uint8_t)(paramf * 2550.0);
+//    param_get(msg_hd.pitch_d_hd, &paramf);
+//    yfpa_param->pitch_d = (uint8_t)(paramf * 25500.0);
+//    param_get(msg_hd.yaw_p_hd, &paramf);
+//    yfpa_param->yaw_p = (uint8_t)(paramf *510.0);
+//    param_get(msg_hd.yaw_i_hd, &paramf);
+//    yfpa_param->yaw_i = (uint8_t)(paramf *1275.0);
+//    param_get(msg_hd.yaw_d_hd, &paramf);
+//    yfpa_param->yaw_d = (uint8_t)(paramf *25500.0);
+    param_get(msg_hd.hor_p_hd, &paramf);
+    yfpa_param->hor_p = (uint8_t)((paramf -0.06)*2834.0);
+    param_get(msg_hd.hor_i_hd, &paramf);
+    yfpa_param->hor_i = (uint8_t)(paramf * 255.0/3.0);
+    param_get(msg_hd.hor_d_hd, &paramf);
+    yfpa_param->hor_d = (uint8_t)((paramf - 0.005)*2684.0);
+    param_get(msg_hd.ver_p_hd, &paramf);
+    yfpa_param->ver_p = (uint8_t)((paramf -0.1)*850.0);
+    param_get(msg_hd.ver_i_hd, &paramf);
+    yfpa_param->ver_i = (uint8_t)((paramf -0.01)*2834.0);
+    param_get(msg_hd.ver_d_hd, &paramf);
+    yfpa_param->ver_d = (uint8_t)(paramf*2550.0);
+    param_get(msg_hd.throttle_hd, &paramf);
+    yfpa_param->throttle_p = (uint8_t)(paramf * 255.0);
+    param_get(msg_hd.xy_p_hd, &paramf);
+    yfpa_param->xy_p = (uint8_t)(paramf * 255.0/2.0);
     param_get(msg_hd.z_p_hd, &paramf);
-    yfpa_param->z_p = (uint8_t)(paramf * 170.0);
+    yfpa_param->z_p = (uint8_t)(paramf * 255.0/1.5);
     param_get(msg_hd.yaw_force_hd, &paramd);
     yfpa_param->yaw_mode =(uint8_t)(paramd);
     param_get(msg_hd.up_vel_max_hd, &paramf);
-    yfpa_param->up_vel_max = (uint8_t)((paramf - 0.5)* 34.0);
+    //yfpa_param->up_vel_max = (uint8_t)((paramf - 0.5)* 34.0);
+    yfpa_param->up_vel_max = (uint8_t)((paramf)* 10.0);
     param_get(msg_hd.xy_vel_max_hd, &paramf);
-    yfpa_param->xy_vel_max = (uint8_t)((paramf-3.0) * 15.0);
+    //yfpa_param->xy_vel_max = (uint8_t)((paramf-3.0) * 15.0);
+    yfpa_param->xy_vel_max = (uint8_t)(paramf * 10.0);
     param_get(msg_hd.roll_rate_hd, &paramf);
     yfpa_param->roll_rate = (uint8_t)(paramf);
     param_get(msg_hd.pitch_rate_hd, &paramf);
@@ -259,23 +308,28 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     yfpa_param->acc_up_max = (uint8_t)((paramf - 2.0)* 19.61);
     param_get(msg_hd.yaw_max_hd, &paramf);
     yfpa_param->yaw_max = (uint8_t)(paramf);
-    param_get(msg_hd.roll_max_hd, &paramf);
-    yfpa_param->roll_max = (uint8_t)(paramf * 2.83);
+//    param_get(msg_hd.roll_max_hd, &paramf);
+//    yfpa_param->roll_max = (uint8_t)(paramf);
+    param_get(msg_hd.att_r_hd, &paramf);
+    yfpa_param->att_p = (uint8_t)(paramf/12.0 *255.0);
     param_get(msg_hd.pitch_max_hd, &paramf);
-    yfpa_param->pitch_max = (uint8_t)((paramf - 20.0) * 1.59);
+    yfpa_param->pitch_max = (uint8_t)(paramf);
     param_get(msg_hd.higt_max_hd, &paramf);
-    yfpa_param->higt_max = (uint16_t)( paramf * 6.5535);
+    //yfpa_param->higt_max = (uint16_t)( paramf * 6.5535);
+    yfpa_param->higt_max = (uint16_t)(paramf);
     param_get(msg_hd.acc_hor_max_hd, &paramf);
-    yfpa_param->acc_hor_max = (uint8_t)( (paramf - 2.0) * 19.61);
+    yfpa_param->acc_hor_max = (uint8_t)(paramf *17);
     param_get(msg_hd.dist_max_hd, &paramf);
-    yfpa_param->dist_max = (uint16_t)(paramf * 6.5535);
+    //yfpa_param->dist_max = (uint16_t)(paramf * 6.5535);
+    yfpa_param->dist_max = (uint16_t)(paramf);
     param_get(msg_hd.mav_type_hd, &paramd);
      yfpa_param->mav_type = get_frame(paramd);
     param_get(msg_hd.battery_n_cells_hd, &paramd);
     yfpa_param->battery_num = (uint8_t)(paramd);
-    param_get(msg_hd.battery_warn_hd, &paramf);
-    paramf = 3.50 + 0.55 *paramf;
-    yfpa_param->battery_warn = (uint8_t)((paramf - 3.55)/0.05 *4);
+    param_get(msg_hd.battery_crit_hd, &paramf);
+    //paramf = 3.50 + 0.55 *paramf;
+    yfpa_param->battery_warn = ((uint8_t)((paramf - 3.54)/0.05))<<2;
+    printf("battery_warn is %d\n", yfpa_param->battery_warn);
     param_get(msg_hd.battery_fail_hd, &paramd);
     int fail_act = 0;
     switch (paramd) {
@@ -288,9 +342,12 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     case 2:
         fail_act = 0x05;
         break;
-//    case 3:
-//        fail_act = 0x00;
-//        break;
+    case 3:
+        fail_act = 0x00;
+        break;
+    case 4:
+        fail_act = 0x02;
+        break;
     default:
         fail_act = 0x00;
         break;
@@ -303,7 +360,8 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     yfpa_param->bettery_fail = (uint8_t)(fail_act);
     yfpa_param->rc_lost_act = 1;
     param_get(msg_hd.dn_vel_max_hd, &paramf);
-    yfpa_param->dn_vel_max = (uint8_t)(paramf  * 63.75);
+    //yfpa_param->dn_vel_max = (uint8_t)(paramf  * 63.75);
+    yfpa_param->dn_vel_max = (uint8_t)(paramf  * 10);
 }
 
 void setd_pack_send (void){
@@ -311,6 +369,7 @@ void setd_pack_send (void){
     memcpy(send_message, wp_data.push, sizeof(SETD));
     send_message[26] = calculate_sum_check(send_message, sizeof(SETD));
     write(uart_read, send_message, sizeof(SETD));
+    printf("setd_pack_send finish \n");
 }
 
 void exyf_response_pack(MSG_type msg_type, MSG_param_hd msg_hd){
@@ -390,4 +449,69 @@ void docap_pack_send (int max_min){
     send_message[7] = calculate_sum_check(send_message, sizeof(DOCAP));
     //send_message[7] = 0xaf;
     write(uart_read, send_message, sizeof(DOCAP));
+}
+
+void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
+    dyd->head[0] = '$';
+    dyd->head[1] = 'D';
+    dyd->head[2] = 'Y';
+    dyd->head[3] = 'D';
+
+    // bit mask for sensor type is :  gyo 0 17 28| acc 1 18 29| mag 2 19 30| baro 3 34 35| gps 31 32 33
+    uint64_t bit_mask =1;
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & bit_mask) ||
+        !(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<1)))
+        {dyd->IMU_status |= 0x80;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & bit_mask) ||
+        !(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<1)))
+        {dyd->IMU_status |= 0x40;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<17)) ||
+        !(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<18)))
+        {dyd->IMU_status |= 0x20;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<17)) ||
+        !(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<18)))
+        {dyd->IMU_status |= 0x10;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<28)) ||
+        !(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<29)))
+        {dyd->IMU_status |= 0x08;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<28)) ||
+        !(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<29)))
+        {dyd->IMU_status |= 0x04;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<2)))
+        {dyd->mag_status |= 0x80;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<2)))
+        {dyd->mag_status |= 0x40;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<19)))
+        {dyd->mag_status |= 0x20;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<19)))
+        {dyd->mag_status |= 0x10;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<30)))
+        {dyd->mag_status |= 0x08;}
+    else if (!(msg_data.status_data.onboard_control_sensors_health & (bit_mask <<30)))
+        {dyd->mag_status |= 0x04;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<31)))
+        {dyd->GPS_baro_status |= 0x80;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<32)))
+        {dyd->GPS_baro_status |= 0x40;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<33)))
+        {dyd->GPS_baro_status |= 0x20;}
+
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<3)))
+        {dyd->GPS_baro_status |= 0x10;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<34)))
+        {dyd->GPS_baro_status |= 0x08;}
+    if (!(msg_data.status_data.onboard_control_sensors_present & (bit_mask <<35)))
+        {dyd->GPS_baro_status |= 0x04;}
+
+    dyd->power_voltage = (uint16_t) (msg_data.dg_voltage_data.voltage_battery_filtered_v *100);
+    printf("dg_voltage is %d\n", dyd->power_voltage);
+    printf("dg_mag is %d\n", dyd->mag_status);
+
 }

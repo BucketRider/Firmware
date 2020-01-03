@@ -53,8 +53,6 @@
 bool is_multirotor(const struct vehicle_status_s *current_status);
 bool is_rotary_wing(const struct vehicle_status_s *current_status);
 bool is_vtol(const struct vehicle_status_s *current_status);
-bool is_fixed_wing(const struct vehicle_status_s *current_status);
-bool is_ground_rover(const struct vehicle_status_s *current_status);
 
 int buzzer_init(void);
 void buzzer_deinit(void);
@@ -68,6 +66,7 @@ void tune_positive(bool use_buzzer);
 void tune_neutral(bool use_buzzer);
 void tune_negative(bool use_buzzer);
 void tune_failsafe(bool use_buzzer);
+void dg_rc_cal_led(void);
 
 int blink_msg_state();
 

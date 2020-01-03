@@ -281,9 +281,9 @@ int run_lm_sphere_fit(const float x[], const float y[], const float z[], float &
 
 		float sphere_jacob[4];
 		//Calculate Jacobian
-		float A = (*diag_x    * (x[k] - *offset_x)) + (*offdiag_x * (y[k] - *offset_y)) + (*offdiag_y * (z[k] - *offset_z));
-		float B = (*offdiag_x * (x[k] - *offset_x)) + (*diag_y    * (y[k] - *offset_y)) + (*offdiag_z * (z[k] - *offset_z));
-		float C = (*offdiag_y * (x[k] - *offset_x)) + (*offdiag_z * (y[k] - *offset_y)) + (*diag_z    * (z[k] - *offset_z));
+        float A = (*diag_x    * (x[k] - *offset_x)) + (*offdiag_x * (y[k] - *offset_y)) + (*offdiag_y * (z[k] - *offset_z));
+        float B = (*offdiag_x * (x[k] - *offset_x)) + (*diag_y    * (y[k] - *offset_y)) + (*offdiag_z * (z[k] - *offset_z));
+        float C = (*offdiag_y * (x[k] - *offset_x)) + (*offdiag_z * (y[k] - *offset_y)) + (*diag_z    * (z[k] - *offset_z));
 		float length = sqrtf(A * A + B * B + C * C);
 
 		// 0: partial derivative (radius wrt fitness fn) fn operated on sample
@@ -417,13 +417,13 @@ int run_lm_ellipsoid_fit(const float x[], const float y[], const float z[], floa
 		ellipsoid_jacob[1] = 1.0f * (((*offdiag_x * A) + (*diag_y    * B) + (*offdiag_z * C)) / length);
 		ellipsoid_jacob[2] = 1.0f * (((*offdiag_y * A) + (*offdiag_z * B) + (*diag_z    * C)) / length);
 		// 3-5: partial derivative (diag offset wrt fitness fn) fn operated on sample
-		ellipsoid_jacob[3] = -1.0f * ((x[k] - *offset_x) * A) / length;
-		ellipsoid_jacob[4] = -1.0f * ((y[k] - *offset_y) * B) / length;
-		ellipsoid_jacob[5] = -1.0f * ((z[k] - *offset_z) * C) / length;
+        ellipsoid_jacob[3] = -1.0f * ((x[k] + *offset_x) * A) / length;
+        ellipsoid_jacob[4] = -1.0f * ((y[k] + *offset_y) * B) / length;
+        ellipsoid_jacob[5] = -1.0f * ((z[k] + *offset_z) * C) / length;
 		// 6-8: partial derivative (off-diag offset wrt fitness fn) fn operated on sample
-		ellipsoid_jacob[6] = -1.0f * (((y[k] - *offset_y) * A) + ((x[k] - *offset_x) * B)) / length;
-		ellipsoid_jacob[7] = -1.0f * (((z[k] - *offset_z) * A) + ((x[k] - *offset_x) * C)) / length;
-		ellipsoid_jacob[8] = -1.0f * (((z[k] - *offset_z) * B) + ((y[k] - *offset_y) * C)) / length;
+        ellipsoid_jacob[6] = -1.0f * (((y[k] + *offset_y) * A) + ((x[k] + *offset_x) * B)) / length;
+        ellipsoid_jacob[7] = -1.0f * (((z[k] + *offset_z) * A) + ((x[k] + *offset_x) * C)) / length;
+        ellipsoid_jacob[8] = -1.0f * (((z[k] + *offset_z) * B) + ((y[k] + *offset_y) * C)) / length;
 
 		for (uint8_t i = 0; i < 9; i++) {
 			// compute JTJ
@@ -742,7 +742,16 @@ calibrate_return calibrate_from_orientation(orb_advert_t *mavlink_log_pub,
 		px4_usleep(20000);
 		calibration_log_info(mavlink_log_pub, "[cal] hold vehicle still on a pending side");
 		px4_usleep(20000);
-		enum detect_orientation_return orient = detect_orientation(mavlink_log_pub, cancel_sub, sub_accel,
+
+        if (!side_data_collected[DETECT_ORIENTATION_RIGHTSIDE_UP] || !side_data_collected[DETECT_ORIENTATION_UPSIDE_DOWN]){
+            rgbled_set_color_and_mode(led_control_s::COLOR_GREEN, led_control_s::MODE_BLINK_FAST);
+        }else if (!side_data_collected[DETECT_ORIENTATION_TAIL_DOWN] || !side_data_collected[DETECT_ORIENTATION_NOSE_DOWN]){
+            rgbled_set_color_and_mode(led_control_s::COLOR_YELLOW, led_control_s::MODE_BLINK_FAST);
+        }else if (!side_data_collected[DETECT_ORIENTATION_LEFT] || !side_data_collected[DETECT_ORIENTATION_RIGHT]){
+            rgbled_set_color_and_mode(led_control_s::COLOR_BLUE, led_control_s::MODE_BLINK_FAST);
+        }
+
+        enum detect_orientation_return orient = detect_orientation(mavlink_log_pub, cancel_sub, sub_accel,
 							lenient_still_position);
 
 		if (orient == DETECT_ORIENTATION_ERROR) {

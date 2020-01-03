@@ -196,3 +196,17 @@ PARAM_DEFINE_INT32(BAT_N_CELLS, 0);
  * @reboot_required true
  */
 PARAM_DEFINE_FLOAT(BAT_CAPACITY, -1.0f);
+
+/**
+ * Warning cell voltage (5C load)
+ *
+ * Defines the cell voltage where needs a 1st level warning (critical)
+ * 2nd level warning (emergency)is 0.1v less than this
+ *
+ * @group Battery Calibration
+ * @unit V
+ * @decimal 2
+ * @increment 0.01
+ * @reboot_required true
+ */
+PARAM_DEFINE_FLOAT(BAT_V_WARNING_DG, 3.55f);

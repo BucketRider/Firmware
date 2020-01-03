@@ -33,6 +33,8 @@ bool check_command_repeat(const uint8_t *buffer, MSG_type msg_type)
         case WIFI_COMM_AUTO_FLIGHT_OFF:
         case WIFI_COMM_DISARMED:
         case WIFI_COMM_ARMED:
+        case WIFI_COMM_POS_SAVE:
+        case WIFI_COMM_REBOOT:
             check_ok = (buffer[5] == buffer[6] && buffer[5] == buffer [7]);
             break;
         case WIFI_COMM_WP_UPLOAD:
@@ -72,7 +74,7 @@ bool check_command_repeat(const uint8_t *buffer, MSG_type msg_type)
     default:
         break;
     }
-    printf("Check command repeat is %d\n", check_ok);
+    //printf("Check command repeat is %d\n", check_ok);
     return check_ok;
 }
 
@@ -123,6 +125,6 @@ uint16_t check_crc(const uint8_t *buffer, uint8_t buflen)
         w_crc = (uint16_t)(crc_table[(chChar ^ w_crc) & 15] ^ (w_crc >>4));
         w_crc = (uint16_t)(crc_table[((chChar>>4) ^ w_crc) & 15] ^ (w_crc >>4));
     }
-    printf("crc check is %x\n", w_crc);
+    //printf("crc check is %x\n", w_crc);
     return w_crc;
 }

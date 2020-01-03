@@ -13,6 +13,7 @@
 #include <systemlib/err.h>
 #include <string.h>
 #include <poll.h>
+#include <pthread.h>
 
 #include <arch/board/board.h>
 
@@ -31,18 +32,26 @@
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/mission_result.h>
+//#include <uORB/topics/mission.h>
 #include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_air_data.h>
 #include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/vehicle_attitude_setpoint.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/geofence_result.h>
 #include <uORB/topics/input_rc.h>
 #include <uORB/topics/follow_target.h>
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/virtual_stick.h>
+#include <uORB/topics/dg_vehicle_status.h>
+#include <uORB/topics/home_position.h>
+#include <uORB/topics/dg_mission.h>
+#include <uORB/topics/subsystem_info.h>
+#include <uORB/topics/dg_voltage.h>
 
 #define WP_DATA_NUM_MAX (uint16_t) 20
 
@@ -56,15 +65,15 @@ typedef struct {
     int32_t gps_wp_latitude;
     float_t gps_yaw;
     uint8_t gps_num;
-    uint8_t year;
-    uint8_t month;
-    uint8_t day;
-    uint8_t hour;
-    uint8_t minute;
-    uint8_t second;
-    //uint32_t YMDHM;
-    //uint16_t MM;
-    uint8_t wp_num;
+//    uint8_t year;
+//    uint8_t month;
+//    uint8_t day;
+//    uint8_t hour;
+//    uint8_t minute;
+//    uint8_t second;
+    uint32_t YMDHM;
+    uint16_t MM;
+    uint8_t wp_seq_low;
     uint8_t rc_yaw;
     uint8_t rc_y;
     uint8_t rc_x;
@@ -76,7 +85,7 @@ typedef struct {
     int8_t local_vx_high8;
     int8_t local_vx_low8;
     uint16_t total_time;
-    int16_t local_vz_sp;
+    int16_t wp_total;
     uint8_t distance_high8;
     uint8_t rc_throttle_mid;
     int16_t local_z_pressure;
@@ -93,7 +102,7 @@ typedef struct {
     int32_t local_roll;
     uint16_t battery_voltage;
     int16_t acc_down;
-    uint8_t mission_num;
+    uint8_t wp_seq_high;
     uint8_t control_status;
     uint16_t battery_usage;
     uint8_t warnning;
@@ -103,16 +112,28 @@ typedef struct {
     uint8_t rc_pitch_mid;
     int8_t local_vy_high8;
     int16_t local_z_sp;
-    uint8_t skyway_state; //0xff
+    uint8_t skyway_state;
     int16_t magnet_yaw;
     int8_t local_vz_low8;
     uint16_t flight_time;
     uint8_t battery_current;
     int8_t local_vy_low8;
     int16_t gps_vy;
-    uint16_t version; //0xffff
+    uint16_t version; //1000
     uint8_t sum_check;
 } STP;
+
+typedef struct
+{
+    char head[4];
+    uint8_t reserve[124];
+    uint8_t IMU_status;
+    uint8_t mag_status;
+    uint8_t GPS_baro_status;
+    uint16_t power_voltage;
+    uint8_t reserve2[6];
+    uint8_t sum_check;
+} DYD;
 
 typedef struct {
     char head[5]; //$YFPA
@@ -122,16 +143,22 @@ typedef struct {
     uint8_t roll_p;
     uint8_t roll_i;
     uint8_t roll_d;
-    uint8_t pitch_p;
-    uint8_t pitch_i;
-    uint8_t pitch_d;
-    uint8_t yaw_p;
-    uint8_t yaw_i;
-    uint8_t yaw_d;
-    uint8_t z_p;
+//    uint8_t pitch_p;
+//    uint8_t pitch_i;
+//    uint8_t pitch_d;
+//    uint8_t yaw_p;
+//    uint8_t yaw_i;
+//    uint8_t yaw_d;
+    uint8_t hor_p;
+    uint8_t hor_i;
+    uint8_t hor_d;
+    uint8_t ver_p;
+    uint8_t ver_i;
+    uint8_t ver_d;
+    uint8_t throttle_p;
     uint8_t yaw_mode; //remain_1
-    uint8_t remain_2;
-    uint8_t remain_3;
+    uint8_t xy_p; //remain_2
+    uint8_t z_p; //remain_3
     uint8_t up_vel_max;
     uint8_t xy_vel_max;
     uint8_t roll_rate;
@@ -140,7 +167,8 @@ typedef struct {
     uint8_t acc_up_max;
     uint8_t remain_4;
     uint8_t yaw_max; //adjust to max yawrate on mannual
-    uint8_t roll_max; //adjust to max tilt on mannual
+    //uint8_t roll_max; //adjust to max tilt on mannual
+    uint8_t att_p;
     uint8_t pitch_max; //adjust to max tilt on auto/posctrl
     uint16_t higt_max;
     uint8_t acc_hor_max;
@@ -293,10 +321,14 @@ typedef struct {
 
 typedef struct {
    STP stp;
+   DYD dyd;
 }MSG_send;
 
 typedef struct {
+   uint16_t total_num;
    uint16_t num;
+   uint8_t speed_pre; //unit: dm
+   uint16_t seq_offset;
    SETD *push;
    //SETD *pop;
    SETD setd[WP_DATA_NUM_MAX];
@@ -322,16 +354,22 @@ typedef struct {
     int attitude_fd;
     int battery_fd;
     int geofence_fd;
+    //int rc_input_fd;
     int vibe_fd;
     int global_position_fd;
+    int attitude_sp_fd;
+    int home_position_fd;
+    int dg_voltage_fd;
 }MSG_orb_sub;
 
 typedef struct {
     orb_advert_t command_pd;
-    orb_advert_t manual_pd;
+    orb_advert_t virtual_stick_pd;
     orb_advert_t local_position_sp_pd;
-    orb_advert_t status_pd;
+    //orb_advert_t status_pd;
     orb_advert_t follow_target_pd;
+    orb_advert_t dg_vehicle_status_pd;
+    orb_advert_t dg_mission_pd;
 }MSG_orb_pub;
 
 typedef struct {
@@ -347,9 +385,12 @@ typedef struct {
     struct vehicle_attitude_s attitude_data;
     struct battery_status_s battery_data;
     struct geofence_result_s geofence_data;
-//    struct input_rc_s input_rc_data;
+    //struct input_rc_s input_rc_data;
     struct estimator_status_s vibe_data;
     struct vehicle_global_position_s global_position_data;
+    struct vehicle_attitude_setpoint_s attitude_sp_data;
+    struct home_position_s home_position_data;
+    struct dg_voltage_s dg_voltage_data;
 //    struct follow_target_s follow_target_data;
 }MSG_orb_data;
 
@@ -360,9 +401,17 @@ typedef struct {
     param_t pitch_p_hd;
     param_t pitch_i_hd;
     param_t pitch_d_hd;
-    param_t yaw_p_hd;
-    param_t yaw_i_hd;
-    param_t yaw_d_hd;
+//    param_t yaw_p_hd;
+//    param_t yaw_i_hd;
+//    param_t yaw_d_hd;
+    param_t hor_p_hd;
+    param_t hor_i_hd;
+    param_t hor_d_hd;
+    param_t ver_p_hd;
+    param_t ver_i_hd;
+    param_t ver_d_hd;
+    param_t throttle_hd;
+    param_t xy_p_hd;
     param_t z_p_hd;
     param_t up_vel_max_hd;
     param_t xy_vel_max_hd;
@@ -371,8 +420,11 @@ typedef struct {
     param_t yaw_rate_hd;
     param_t acc_up_max_hd;
     param_t yaw_max_hd;
+    param_t yaw_fast_hd;
     param_t roll_max_hd;
     param_t pitch_max_hd;
+    param_t att_r_hd;
+    param_t att_p_hd;
     param_t higt_max_hd;
     param_t acc_hor_max_hd;
     param_t dist_max_hd;
@@ -380,7 +432,8 @@ typedef struct {
     //param_t calibration_hd; // not set
     param_t mav_type_hd;
     param_t battery_n_cells_hd;
-    param_t battery_warn_hd;
+    //param_t battery_warn_hd;
+    param_t battery_crit_hd;
     //param_t slope_climb_hd; //not set
     //param_t mount_roll_hd; // not set
     //param_t mount_pitch_hd; // not set
@@ -411,9 +464,11 @@ extern Waypoint_saved wp_data;
 
 extern int uart_read;
 
-extern bool read_to_buff(uint8_t *buffer, int start, int end);
+extern int read_to_buff(uint8_t *buffer, int start, int end);
 
 extern void stp_pack (STP *stp, MSG_orb_data stp_data);
+
+extern void dyd_pack(DYD *dyd, MSG_orb_data msg_data);
 
 extern bool check_command_repeat(const uint8_t *buffer, MSG_type msg_type);
 
@@ -427,9 +482,9 @@ extern uint8_t calculate_sum_check (const uint8_t *send_message, int len);
 
 extern uint16_t check_crc(const uint8_t *buffer, uint8_t buflen);
 
-extern void msg_pack_send(MSG_orb_data msg_data);
+extern void msg_pack_send(MSG_orb_data msg_data, MSG_orb_pub *msg_pd);
 
-extern void find_r_type(uint8_t *buffer, MSG_orb_data *msg_data, MSG_orb_pub *msg_pd,
+extern int find_r_type(uint8_t *buffer, MSG_orb_data *msg_data, MSG_orb_pub *msg_pd,
                         MSG_param_hd msg_hd);
 
 extern void msg_param_saved_get(MSG_param_hd msg_hd);
@@ -443,5 +498,7 @@ extern void follow_ack_pack_send(uint8_t failed);
 extern void exyf_response_pack(MSG_type msg_type, MSG_param_hd msg_hd);
 
 extern int find_frame(uint8_t data);
+
+extern void wp_data_init(void);
 
 #endif // RW_UART_H

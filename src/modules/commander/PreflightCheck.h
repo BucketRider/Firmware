@@ -86,6 +86,6 @@ static constexpr unsigned max_mandatory_mag_count = 1;
 static constexpr unsigned max_optional_mag_count = 4;
 
 static constexpr unsigned max_mandatory_baro_count = 1;
-static constexpr unsigned max_optional_baro_count = 1;
+static constexpr unsigned max_optional_baro_count = 3;
 
 }
