@@ -3,7 +3,6 @@
 
 static double lat_save =0;
 static double lon_save =0;
-//static uint64_t vs_last_time = 0;
 
 void msg_pack_send( MSG_orb_data msg_data, MSG_orb_pub *msg_pd)
 {
@@ -37,35 +36,38 @@ void msg_pack_send( MSG_orb_data msg_data, MSG_orb_pub *msg_pd)
     }
 }
 
-void set_command_param(struct vehicle_command_s *command_data, int command_num, float param1, float param2,
-                                        float param3, float param4, double param5, double param6, float param7)
-{
-    command_data->command = command_num;
-    command_data->param1 = param1;
-    command_data->param2 = param2;
-    command_data->param3 = param3;
-    command_data->param4 = param4;
-    command_data->param5 = param5;
-    command_data->param6 = param6;
-    command_data->param7 = param7;
-    command_data->target_system = 1;
-    command_data->target_component =1;
-    command_data->source_system =255;
-    command_data->source_component =0;
-    command_data->confirmation =0;
-    command_data->from_external =1;
-}
-
-void publish_commander_pd(MSG_orb_pub *msg_pd, MSG_orb_data *msg_data)
+void publish_commander_pd(MSG_orb_pub *msg_pd,  struct vehicle_command_s *command_data)
 {
     if (msg_pd->command_pd != NULL){
-            orb_publish(ORB_ID(vehicle_command), msg_pd->command_pd, &msg_data->command_data);
-            printf("Passing 2_1\n");
+            orb_publish(ORB_ID(vehicle_command), msg_pd->command_pd, command_data);
+            //printf("Passing 2_1\n");
     }
     else{
-            msg_pd->command_pd = orb_advertise(ORB_ID(vehicle_command), &msg_data->command_data);
-            printf("Passing 2_2\n");
+            msg_pd->command_pd = orb_advertise(ORB_ID(vehicle_command), command_data);
+            //printf("Passing 2_2\n");
     }
+}
+
+void set_command_param(MSG_orb_pub *msg_pd, int command_num,float param1, float param2,
+                                     float param3, float param4, double param5, double param6, float param7)
+{
+    struct vehicle_command_s command_data = {};
+    command_data.command = command_num;
+    command_data.param1 = param1;
+    command_data.param2 = param2;
+    command_data.param3 = param3;
+    command_data.param4 = param4;
+    command_data.param5 = param5;
+    command_data.param6 = param6;
+    command_data.param7 = param7;
+    command_data.target_system = 1;
+    command_data.target_component =1;
+    command_data.source_system =255;
+    command_data.source_component =0;
+    command_data.confirmation =0;
+    command_data.from_external =1;
+    command_data.timestamp = hrt_absolute_time();
+    publish_commander_pd(msg_pd, &command_data);
 }
 
 void msg_param_saved_get(MSG_param_hd msg_hd)
@@ -81,7 +83,7 @@ void msg_param_saved_get(MSG_param_hd msg_hd)
     write(uart_read, param_saved, sizeof(YFPA_param));
 }
 
-void set_rc_channel_max_min(MSG_orb_pub *msg_pd, MSG_orb_data *msg_data){
+void set_rc_channel_max_min(MSG_orb_pub *msg_pd){
     int input_rc_fd =orb_subscribe(ORB_ID(input_rc));
     struct input_rc_s value;
     float max_1,max_2 ,max_3, max_4;
@@ -98,8 +100,7 @@ void set_rc_channel_max_min(MSG_orb_pub *msg_pd, MSG_orb_data *msg_data){
     param_t channel3_min = param_find("RC3_MIN");
     param_t channel4_min = param_find("RC4_MIN");
 
-    set_command_param(&msg_data->command_data, 223, 1, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_DO_RC_CALIBRATION
-    publish_commander_pd(msg_pd, msg_data);
+    set_command_param(msg_pd, 223, 1, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_DO_RC_CALIBRATION
     usleep(1000000);
 
     for (int i=0; i< 500; i++){
@@ -126,8 +127,7 @@ void set_rc_channel_max_min(MSG_orb_pub *msg_pd, MSG_orb_data *msg_data){
     param_set(channel4_min, &min_4);
     orb_unsubscribe(input_rc_fd);
 
-    set_command_param(&msg_data->command_data, 223, 0, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_DO_RC_CALIBRATION
-    publish_commander_pd(msg_pd, msg_data);
+    set_command_param(msg_pd, 223, 0, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_DO_RC_CALIBRATION
 }
 
 void set_rc_channel_mid(void){
@@ -171,10 +171,10 @@ void publish_dg_mission_pd(MSG_orb_pub *msg_pd, struct dg_mission_s *mission_ite
 {
     if (msg_pd->dg_mission_pd != NULL) {
         orb_publish(ORB_ID(dg_mission), msg_pd->dg_mission_pd, mission_item);
-        printf("Passing 2_1\n");
+        //printf("Passing 2_1\n");
     } else {
         msg_pd->dg_mission_pd = orb_advertise(ORB_ID(dg_mission), mission_item);
-        printf("Passing 2_2\n");
+        //printf("Passing 2_2\n");
     }
 }
 
@@ -226,15 +226,15 @@ void publish_vs_pd(MSG_orb_pub *msg_pd, struct virtual_stick_s *vs_sp)
 {
     if (msg_pd->virtual_stick_pd != NULL){
             orb_publish(ORB_ID(virtual_stick), msg_pd->virtual_stick_pd, vs_sp);
-            printf("Passing 2_1\n");
+            //printf("Passing 2_1\n");
     }
     else{
             msg_pd->virtual_stick_pd = orb_advertise(ORB_ID(virtual_stick), vs_sp);
-            printf("Passing 2_2\n");
+            //printf("Passing 2_2\n");
     }
 }
 
-void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data *msg_data,
+void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data msg_data,
                                     MSG_param_hd msg_hd, MSG_type msg_type)
 {
     int paramd;
@@ -245,10 +245,10 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
     case MSG_NAME_WIFI:
         switch (msg_type.command) {
         case WIFI_COMM_WAYPOINT:
-            set_command_param(&msg_data->command_data, 192, -1, 1, 0, NAN,
+            set_command_param(msg_pd, 192, -1, 1, 0, NAN,
                               ((double_t)*(int32_t*)((uint32_t)buffer + 6)) * 1e-7,
                               ((double_t)*(int32_t*)((uint32_t)buffer + 10))* 1e-7,
-                              (msg_data->global_position_data.alt));
+                              (msg_data.global_position_data.alt));
 
 //            set_command_param(&msg_data->command_data, 192, -1, 1, 0, NAN,
 //                              lat_save,
@@ -256,35 +256,33 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
 //                              (msg_data->global_position_data.alt));
 //            if(lat_save != 0 && lon_save !=0)
 
-            publish_commander_pd(msg_pd, msg_data);
-            printf("lat is %.7f, lon is %.7f\n", ((double_t)*(int32_t*)((uint32_t)buffer + 6)) * 1e-7,
-                   ((double_t)*(int32_t*)((uint32_t)buffer + 10))* 1e-7);
-            printf("Passing waypoint\n");
+            //printf("lat is %.7f, lon is %.7f\n", ((double_t)*(int32_t*)((uint32_t)buffer + 6)) * 1e-7,
+            //       ((double_t)*(int32_t*)((uint32_t)buffer + 10))* 1e-7);
+            //printf("Passing waypoint\n");
             break;
         case WIFI_COMM_AUTO_LAND:
-            set_command_param(&msg_data->command_data, 21, 0, 0, 0, NAN,
-                              (msg_data->global_position_data.lat),
-                              (msg_data->global_position_data.lon),
+            set_command_param(msg_pd, 21, 0, 0, 0, NAN,
+                              (msg_data.global_position_data.lat),
+                              (msg_data.global_position_data.lon),
                               0);
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing land\n");
+            //printf("Passing land\n");
             break;
         case WIFI_COMM_AUTO_TAKEOFF:
-            if (msg_data->home_position_data.valid_alt && msg_data->home_position_data.valid_hpos){
-                set_command_param(&msg_data->command_data, 400,
+            //if (msg_data->home_position_data.valid_alt && msg_data->home_position_data.valid_hpos)
+            if (msg_data.local_position_data.xy_global && msg_data.local_position_data.z_global)
+            {
+                set_command_param(msg_pd, 400,
                                                 1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
-                publish_commander_pd(msg_pd, msg_data);
                 usleep(1000000);
-                set_command_param(&msg_data->command_data, 22, 0, 0, 0, NAN,
-                                  (msg_data->global_position_data.lat),
-                                  (msg_data->global_position_data.lon),
-                                  (msg_data->home_position_data.alt + 5.0));
-                publish_commander_pd(msg_pd, msg_data);
-                printf("Passing takeoff\n");
+                set_command_param(msg_pd, 22, 0, 0, 0, NAN,
+                                  (msg_data.global_position_data.lat),
+                                  (msg_data.global_position_data.lon),
+                                  (msg_data.home_position_data.alt + 5.0));
+                //printf("Passing takeoff\n");
             }
             break;
         case WIFI_COMM_WP_UPLOAD:
-            printf("Start upload\n");
+            //printf("Start upload\n");
             {
                 uint8_t newpoint;
                 if (wp_data.setd[*(uint16_t*)((uint32_t)buffer + 6) -1].waypoint_seq > 0){
@@ -314,7 +312,7 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
                 wp_save(msg_pd);
                 //if (wp_data.num == wp_data.total_num) printf("All waypoints is upload\n");
                 //else wp_data.push = &wp_data.setd[wp_data.num];
-                printf("Passing wy_upload, num is %d %d\n", wp_data.num, (wp_data.push - wp_data.setd +1));
+                //printf("Passing wy_upload, num is %d %d\n", wp_data.num, (wp_data.push - wp_data.setd +1));
                 //response wp pushed
                 setd_pack_send();
             }
@@ -322,7 +320,7 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
         case WIFI_COMM_WP_UPLOAD_NUM:
             wp_data_init();
             wp_data.total_num = *(uint16_t*)((uint32_t)buffer + 6);
-            printf("Wp total_num is %d\n", wp_data.total_num);
+            //printf("Wp total_num is %d\n", wp_data.total_num);
             mission_item.timestamp = hrt_absolute_time();
             mission_item.msg_type = 1; //DG_MISSION_COUNT_MSG
             mission_item.mission_type = 0; //MAV_MISSION_TYPE_MISSION
@@ -331,7 +329,7 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             mission_item.count = wp_data.total_num;
             publish_dg_mission_pd(msg_pd, &mission_item);
             usleep(50000);
-            printf("Passing wp_upload_num\n");
+            //printf("Passing wp_upload_num\n");
             break;
         case WIFI_COMM_WP_DOWNLOAD:
             usleep(0);
@@ -344,9 +342,9 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
                 send_message[26] = calculate_sum_check(send_message, sizeof(SETD));
                 //send_message[26] = 0xae;
                 write(uart_read, send_message, sizeof(SETD));
-                printf("Download waypoints num %d\n", i+1);
+                //printf("Download waypoints num %d\n", i+1);
                 if (p == &wp_data.setd[WP_DATA_NUM_MAX -1]) {
-                    printf("Too many waypoints\n");
+                    //printf("Too many waypoints\n");
                     wp_data.num =WP_DATA_NUM_MAX;
                 }
                 else p++;
@@ -355,17 +353,16 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
         case WIFI_COMM_RECEIVER_ON:
             paramd = 0;
             param_set(msg_hd.rc_on_off_hd, &paramd);
-            printf("Passing reiceiver on\n");
+            //printf("Passing reiceiver on\n");
             break;
         case WIFI_COMM_RECEIVER_OFF:
             paramd = 1; //RC_IN_MODE_OFF
             param_set(msg_hd.rc_on_off_hd, &paramd);
-            printf("Passing reiceiver off\n");
+            //printf("Passing reiceiver off\n");
             break;
         case WIFI_COMM_GYRO_CLEAR:
-            set_command_param(&msg_data->command_data, 241, 1, 0, 0, 0, 0, 0, 0);//CMD_PREFLIGHT_CALIBRATION
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing gyro_calibration\n");
+            set_command_param(msg_pd, 241, 1, 0, 0, 0, 0, 0, 0);//CMD_PREFLIGHT_CALIBRATION
+            //printf("Passing gyro_calibration\n");
             break;
         case WIFI_COMM_WP_CHAGE:
             mission_item.timestamp = hrt_absolute_time();
@@ -374,81 +371,88 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
             mission_item.target_component =1;
             mission_item.seq = (uint16_t)buffer[7] + ((uint16_t) buffer[8]<<8) -1;
             publish_dg_mission_pd(msg_pd, &mission_item);
-            printf("Passing wp_chage\n");
+            //printf("Passing wp_chage\n");
             break;
         case WIFI_COMM_PARAM_GET:
-            msg_pack_send(*msg_data, msg_pd);
             msg_param_saved_get(msg_hd);
-            printf("Passing param_get\n");
+            //printf("Passing param_get\n");
             break;
         case WIFI_COMM_MAG_CALI:
-            set_command_param(&msg_data->command_data, 241, 0, 1, 0, 0, 0, 0, 0);//CMD_PREFLIGHT_CALIBRATION
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing mag_calibration\n");
+            set_command_param(msg_pd, 241, 0, 1, 0, 0, 0, 0, 0);//CMD_PREFLIGHT_CALIBRATION
+            //printf("Passing mag_calibration\n");
             break;
         case WIFI_COMM_HIGHT_CHANGE:
             usleep(0);
-            set_command_param(&msg_data->command_data, 192, -1, 1, 0, NAN,
-                              (msg_data->global_position_data.lat),
-                              (msg_data->global_position_data.lon),
-                              (msg_data->home_position_data.alt + (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0));
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing hight_change, hight is %.4f\n", (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0);
+            set_command_param(msg_pd, 192, -1, 1, 0, NAN,
+                              (msg_data.global_position_data.lat),
+                              (msg_data.global_position_data.lon),
+                              (msg_data.home_position_data.alt + (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0));
+            //printf("Passing hight_change, hight is %.4f\n", (float_t)*(int16_t*)((uint32_t)buffer + 7)/10.0);
             break;
         case WIFI_COMM_ESC_CALI_ON:
-            set_command_param(&msg_data->command_data, 241, 0, 0, 0, 0, 0, 0, 1);//CMD_PREFLIGHT_CALIBRATION
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing esc_cali\n");
+            set_command_param(msg_pd, 241, 0, 0, 0, 0, 0, 0, 1);//CMD_PREFLIGHT_CALIBRATION
+            //printf("Passing esc_cali\n");
             break;
         case WIFI_COMM_CALI_QUIT:
-            set_command_param(&msg_data->command_data, 241, 0, 0, 0, 0, 0, 0, 0);//CMD_PREFLIGHT_CALIBRATION
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing cali_off\n");
+            set_command_param(msg_pd, 241, 0, 0, 0, 0, 0, 0, 0);//CMD_PREFLIGHT_CALIBRATION
+            //printf("Passing cali_off\n");
             break;
         case WIFI_COMM_AUTO_FLIGHT_ON:
-            set_command_param(&msg_data->command_data, 176, 189, 4, 4, 0, 0, 0, 0);//VEHICLE_SET_MODE :MISSION
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing atuo_on\n");
+            set_command_param(msg_pd, 176, 189, 4, 4, 0, 0, 0, 0);//VEHICLE_SET_MODE :MISSION
+            //printf("Passing atuo_on\n");
             break;
         case WIFI_COMM_AUTO_FLIGHT_OFF:
-            set_command_param(&msg_data->command_data, 176, 189, 4, 3, 0, 0, 0, 0); //VEHICLE_SET_MODE :LOITER
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing auto_off\n");
+            set_command_param(msg_pd, 176, 189, 4, 3, 0, 0, 0, 0); //VEHICLE_SET_MODE :LOITER
+            //printf("Passing auto_off\n");
             break;
         case WIFI_COMM_GET_MID:
             set_rc_channel_mid();
-            printf("Passing param_set get_mid\n");
+            //printf("Passing param_set get_mid\n");
             //response
             docap_pack_send(0);
             break;
         case WIFI_COMM_DISARMED:
-            set_command_param(&msg_data->command_data, 400,
-                                            0, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing disarm\n");
+            set_command_param(msg_pd, 400, 0, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
+            //printf("Passing disarm\n");
             break;
         case WIFI_COMM_ARMED:
-            set_command_param(&msg_data->command_data, 400,
-                                            1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing arm\n");
+            set_command_param(msg_pd, 400, 1, 0, 0, 0, 0, 0, 0);//VEHICLE_CMD_COMPONENT_ARM_DISARM
+            //printf("Passing arm\n");
             break;
         case WIFI_COMM_RC_POS:
-            printf("Set_rc_channel_limit Start\n");
-            set_rc_channel_max_min(msg_pd, msg_data);
-            printf("Set_rc_channel_limit Finish\n");
+            //printf("Set_rc_channel_limit Start\n");
+            set_rc_channel_max_min(msg_pd);
+            //printf("Set_rc_channel_limit Finish\n");
             //response
             docap_pack_send(1);
             break;
+        case WIFI_COMM_FOLLOW_DG:
+            if (msg_data.local_position_data.xy_global && msg_data.local_position_data.z_global){
+                if (buffer[8] == 1)
+                set_command_param(msg_pd, 176, 189, 4, 8, 0, 0, 0, 0);
+                else
+                set_command_param(msg_pd, 176, 189, 4, 3, 0, 0, 0, 0);
+
+//                struct follow_dg_s follow_msg ={};
+//                follow_msg.enable = (buffer[8] == 1) ? true :false;
+//                follow_msg.timestamp = hrt_absolute_time();
+//                if (msg_pd->follow_dg_pd != NULL) {
+//                    orb_publish(ORB_ID(follow_dg), msg_pd->follow_dg_pd, &follow_msg);
+//                    //printf("Passing 2_1\n");
+//                } else {
+//                    msg_pd->follow_dg_pd = orb_advertise(ORB_ID(follow_dg), &follow_msg);
+//                    //printf("Passing 2_2\n");
+//                }
+                printf("msg has send to follow_dg\n");
+            }
+            break;
         case WIFI_COMM_POS_SAVE:
-            lat_save = msg_data->global_position_data.lat;
-            lon_save = msg_data->global_position_data.lon;
+            lat_save = msg_data.global_position_data.lat;
+            lon_save = msg_data.global_position_data.lon;
             break;
         case WIFI_COMM_REBOOT:
-            if (msg_data->arm_data.armed == false){
-                set_command_param(&msg_data->command_data, 246,
-                                                3, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_PREFLIGHT_REBOOT_SHUTDOWN
-                publish_commander_pd(msg_pd, msg_data);
+            if (msg_data.arm_data.armed == false){
+                set_command_param(msg_pd, 246, 3, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_PREFLIGHT_REBOOT_SHUTDOWN
             }
             break;
         default:
@@ -466,15 +470,15 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
         vs_sp.z = 2.0 - (float_t)(((uint16_t) buffer[11]<<8) + buffer [12])/1000.0;
         //printf("Passing iwfi_pack, x = %.3f y = %.3f z = %.3f r = %.3f\n", vs_sp.x, vs_sp.y, vs_sp.z, vs_sp.r);
         //if ((msg_data->status_data.nav_state == 2 || msg_data->status_data.nav_state == 5) && check_mid(&vs_sp))
-        if (msg_data->status_data.nav_state >=2&& msg_data->status_data.nav_state <=5)
+        if (msg_data.status_data.nav_state >=2&& msg_data.status_data.nav_state <=5)
             vs_sp.vs_enable = 1;
         else vs_sp.vs_enable = 0;
 //        int input_rc_fd =orb_subscribe(ORB_ID(input_rc));
 //        struct input_rc_s value = {};
 //        orb_copy(ORB_ID(input_rc), input_rc_fd, &value);
 //        vs_sp.rc_signal_lost = value.rc_failsafe || value.rc_lost || (value.timestamp == 0);
-        vs_sp.rc_signal_lost = msg_data->status_data.rc_signal_lost;
-         printf("timestamp is %lld\n", vs_sp.timestamp/1000);
+        vs_sp.rc_signal_lost = msg_data.status_data.rc_signal_lost;
+         //printf("timestamp is %lld\n", vs_sp.timestamp/1000);
         //printf("vs_enable = %d nav_state = %d\n", vs_sp.vs_enable, msg_data->status_data.nav_state);
          publish_vs_pd(msg_pd, &vs_sp);
         break;
@@ -490,13 +494,11 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
                 paramd= 0;
                 param_set(msg_hd.yaw_force_hd, &paramd);
             }
-            printf("Passing yfwi_yaw_force\n");
+            //printf("Passing yfwi_yaw_force\n");
             break;
         case YFWI_COMM_RETURN:
-            set_command_param(&msg_data->command_data, 20, 0, 0, 0, 0, 0, 0, 0);
-                                           //VEHICLE_CMD_NAV_RETURN_TO_LAUNCH
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing yfwi_return\n");
+            set_command_param(msg_pd, 20, 0, 0, 0, 0, 0, 0, 0); //VEHICLE_CMD_NAV_RETURN_TO_LAUNCH
+            //printf("Passing yfwi_return\n");
             break;
         default:
             break;
@@ -506,15 +508,14 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
     case MSG_NAME_EXYF:
         switch (msg_type.command) {
         case EXYF_COMM_LOITER_YAW:
-            if (msg_data->status_data.nav_state == 4){ //NAVIGATION_STATE_AUTO_LOITER
-                set_command_param(&msg_data->command_data, 17, 0, 0, 0,
+            if (msg_data.status_data.nav_state == 4){ //NAVIGATION_STATE_AUTO_LOITER
+                set_command_param(msg_pd, 17, 0, 0, 0,
                                   (float_t)*(int32_t*)((uint32_t)buffer + 9),
-                                  (msg_data->global_position_data.lat),
-                                  (msg_data->global_position_data.lon),
-                                  (msg_data->global_position_data.alt));
+                                  (msg_data.global_position_data.lat),
+                                  (msg_data.global_position_data.lon),
+                                  (msg_data.global_position_data.alt));
             }
-            publish_commander_pd(msg_pd, msg_data);
-            printf("Passing loiter_yaw\n");
+            //printf("Passing loiter_yaw\n");
             break;
         case EXYF_COMM_LOITER_MOVE:
 //             if (msg_data->status_data.nav_state == 4){ //NAVIGATION_STATE_AUTO_LOITER
@@ -551,27 +552,27 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
         case EXYF_COMM_IDLE_SPEED_SET:
             paramd = (int)*(uint16_t*)((uint32_t)buffer + 9);
             param_set(msg_hd.pwm_min_hd, &paramd);
-             printf("Passing idle_speed_set\n");
+             //printf("Passing idle_speed_set\n");
             break;
         case EXYF_COMM_PLANE_SET:
             paramd = find_frame(buffer[9]);
             param_set(msg_hd.mav_type_hd, &paramd);
-            printf("Passing plane_set\n");
+            //printf("Passing plane_set\n");
             break;
         case EXYF_COMM_FOLLOW:
-            if (msg_data->status_data.nav_state != 19){  //NAVIGATION_STATE_AUTO_FOLLOW_TARGET = 19
-                printf("Flight mode is not follow\n");
+            if (msg_data.status_data.nav_state != 19){  //NAVIGATION_STATE_AUTO_FOLLOW_TARGET = 19
+                //printf("Flight mode is not follow\n");
                 follow_ack_pack_send(1);
             }
             else {
-                struct follow_target_s follow_target_data;
+                struct follow_target_s follow_target_data ={};
                 memset(&follow_target_data, 0, sizeof(follow_target_data));
 //                for(int i =0; i < 48; i++){
 //                printf("Buffer[%d] is %x\n", i, buffer[i]);
 //                }
                 memcpy(&follow_target_data.lat, &buffer[9], sizeof(double));
                 //follow_target_data.lat = follow_target_data.lat * 1e7;
-                printf("lat is %.4f\n", follow_target_data.lat);
+                //printf("lat is %.4f\n", follow_target_data.lat);
                 memcpy(&follow_target_data.lon, &buffer[17], sizeof(double));
                 memcpy(&follow_target_data.alt, &buffer[25], sizeof(float));
                 memcpy(&follow_target_data.vy, &buffer[29], sizeof(float));
@@ -582,16 +583,16 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
                 param_set(ft_location_hd, &paramd);
                 param_t ft_distance_hd = param_find("NAV_FT_DST");
                 memcpy(&paramf , &buffer[42], sizeof(float));
-                printf("Follow distiance is %.4f\n",paramf);
+                //printf("Follow distiance is %.4f\n",paramf);
                 param_set(ft_distance_hd, &paramf);
                 follow_target_data.timestamp = hrt_absolute_time();
                 if (msg_pd->follow_target_pd != NULL){
                         orb_publish(ORB_ID(follow_target), msg_pd->follow_target_pd, &follow_target_data);
-                        printf("Passing 2_1\n");
+                        //printf("Passing 2_1\n");
                 }
                 else{
                         msg_pd->follow_target_pd = orb_advertise(ORB_ID(follow_target), &follow_target_data);
-                        printf("Passing 2_2\n");
+                        //printf("Passing 2_2\n");
                 }
                 follow_ack_pack_send(0);
             }
@@ -606,22 +607,17 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
         case EXEX_COMM_HIGHT_CHANGE:
             //paramf = (float_t)*(uint16_t*)((uint32_t)buffer + 9);
             usleep(0);
-            int home_position_fd = orb_subscribe(ORB_ID(home_position));
-            struct home_position_s home_position_data = {};
-            orb_copy(ORB_ID(home_position), home_position_fd, &home_position_data);
             memcpy(&paramf , &buffer[9], sizeof(float));
-            set_command_param(&msg_data->command_data, 17, 0, 0, 0, 0,
-                              (msg_data->global_position_data.lat),
-                              (msg_data->global_position_data.lon),
-                              (home_position_data.alt+ paramf /10.0));
+            set_command_param(msg_pd, 17, 0, 0, 0, 0,
+                              (msg_data.global_position_data.lat),
+                              (msg_data.global_position_data.lon),
+                              (msg_data.home_position_data.alt+ paramf /10.0));
             memcpy(&paramf , &buffer[11], sizeof(float));
             param_set(msg_hd.up_vel_max_hd, &paramf);
             param_set(msg_hd.dn_vel_max_hd, &paramf);
-            publish_commander_pd(msg_pd, msg_data);
-            orb_unsubscribe(home_position_fd);
             break;
         default:
-            printf("Passing invaild command\n");
+            //printf("Passing invaild command\n");
             break;
         }
         break;
@@ -631,7 +627,7 @@ void msg_orb_param_pro(const uint8_t *buffer, MSG_orb_pub *msg_pd, MSG_orb_data 
     }
 }
 
-int find_r_type( uint8_t *buffer, MSG_orb_data *msg_data,  MSG_orb_pub *msg_pd,
+int find_r_type(const uint8_t *buffer, const int data_len,const MSG_orb_data msg_data,  MSG_orb_pub *msg_pd,
                         MSG_param_hd msg_hd)
 {
     MSG_type msg_type;
@@ -645,19 +641,20 @@ int find_r_type( uint8_t *buffer, MSG_orb_data *msg_data,  MSG_orb_pub *msg_pd,
         //nread +=read_to_buff(buffer, 5, 30);
         //if (nread == 25)
         {
-
+            if (data_len < 30) return -1;
             msg_type.name =MSG_NAME_WIFI;
             msg_type.command = buffer[5];
 
-            printf("Sum check is %d, %d\n", buffer[29], calculate_sum_check(buffer, 30));
+            //printf("Sum check is %d, %d\n", buffer[29], calculate_sum_check(buffer, 30));
             //if(check_command_repeat(buffer, msg_type) && buffer[29] == calculate_sum_check(buffer, 30))
             if (check_command_repeat(buffer, msg_type) && (buffer[29] == 0x3f || buffer[29] == calculate_sum_check(buffer, 30)))
             {
-                printf("Passing check\n");
+                //printf("Passing check\n");
                 msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
-                return 30;
+                //return 30;
             }
-            else return -1;
+            //else return 0;
+            return 30;
         }
 
     }
@@ -665,92 +662,99 @@ int find_r_type( uint8_t *buffer, MSG_orb_data *msg_data,  MSG_orb_pub *msg_pd,
     name = "$YFWI";
     if (compare_buffer_n(buffer, (uint8_t*)name, 5))
     {
-        printf("Passing YFWI\n");
+        //printf("Passing YFWI\n");
         uint8_t buflen;
         //nread +=read_to_buff(buffer, 5, 6);
         //if (nread < 1) return nread;
         buflen = buffer[5];
-        printf("buffer len is %d\n", buflen);
+        if (data_len < buflen) return -1;
+        //printf("buffer len is %d\n", buflen);
         //nread +=read_to_buff(buffer, 6, buflen);
         //if (nread == (buflen -5))
         {
             msg_type.name =MSG_NAME_YFWI;
             msg_type.command = buffer[6];
             uint16_t  crc_receive = (uint16_t)buffer[buflen -2] + ((uint16_t)buffer[buflen -1] << 8);
-            printf("crc receive is %x\n",crc_receive);
+            //printf("crc receive is %x\n",crc_receive);
             if (check_command_repeat(buffer, msg_type) && crc_receive == check_crc(buffer, buflen))
             //if (check_command_repeat(buffer, msg_type) && buffer[buflen + 7] == 0x3f)
             {
-                printf("Passing check\n");
+                //printf("Passing check\n");
                 if (msg_type.command == YFWI_COMM_CHANGE_PARAM) {
                     if (yfwi_param_set(buffer, msg_hd)) {
                         YFPA_param yfpa_param;
-                         memset(&yfpa_param, 0, sizeof(YFPA_param));
+                        memset(&yfpa_param, 0, sizeof(YFPA_param));
                         yfpa_param_pack(&yfpa_param, msg_hd);
                         memcpy(param_saved, &yfpa_param, sizeof(YFPA_param));
                         uint16_t crc = check_crc(param_saved, 62);
                         param_saved[60] = (uint8_t)(crc & 0x00ff);
                         param_saved[61] = (uint8_t)((crc & 0xff00)>>8);
                         write(uart_read, param_saved, sizeof(YFPA_param));
-                        printf("Response Sended\n");
+                        //printf("Response Sended\n");
                     }
                 }
                 else {
                     msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
                 }
-                return buflen;
+                //return buflen;
             }
-            else return -1;
+            //else return 0;
+            return buflen;
         }
     }
 
     name = "$IWFI";
     if (compare_buffer_n(buffer, (uint8_t*)name, 5))
     {
-        printf("Passing IWFI\n");
+        //printf("Passing IWFI\n");
         //nread +=read_to_buff(buffer, 5, 30);
         //if (nread == 25)
+        if (data_len<30) return -1;
          {
             msg_type.name =MSG_NAME_IWFI;
             //if(check_command_repeat(buffer, msg_type) && buffer[29] == calculate_sum_check(buffer, 30))
             if (check_command_repeat(buffer, msg_type) && (buffer[29] == 0x3f || buffer[29] == calculate_sum_check(buffer, 30)))
              {
-                 printf("Passing check\n");
+                 //printf("Passing check\n");
                  msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
-                 return 30;
+                 //return 30;
              }
-            else return -1;
+            //else return 0;
+            return 30;
          }
     }
 
     name = "$HFMR";
     if (compare_buffer_n(buffer, (uint8_t*)name, 5))
     {
-        printf("Passing HFMR\n");
+        //printf("Passing HFMR\n");
         //nread +=read_to_buff(buffer, 5, 30);
         //if (nread == 25)
+        if (data_len<30) return -1;
         {
             msg_type.name =MSG_NAME_HFMR;
             if(buffer[29] == calculate_sum_check(buffer, 30))
              //if (buffer[29] == 0x3f)
              {
                 param_reset_all();
-                return 30;
+                //return 30;
              }
-            else return -1;
+            //else return 0;
+            return 30;
         }
     }
 
     name = "$EXYF";
     if (compare_buffer_n(buffer, (uint8_t*)name, 5))
     {
-        printf("Passing EXYF\n");
+        //printf("Passing EXYF\n");
         uint8_t buflen;
         //nread +=read_to_buff(buffer, 5, 7);
         //if (nread < 2) return nread;
         //if (!read_to_buff(buffer, 5, 7)) return;
         buflen = (uint16_t)buffer[5] + ((uint16_t)buffer[6]<<8);
-        printf("Buflen is %d\n", buflen);
+        if (data_len < buflen) return -1;
+        //printf("Buflen is %d\n", buflen);
         //nread +=read_to_buff(buffer, 7, buflen);
         //if (nread == (buflen - 5))
         //if (read_to_buff(buffer, 7, buflen))
@@ -759,26 +763,28 @@ int find_r_type( uint8_t *buffer, MSG_orb_data *msg_data,  MSG_orb_pub *msg_pd,
             msg_type.command = buffer[7];
             uint16_t  crc_receive = (uint16_t)buffer[buflen -2] + ((uint16_t)buffer[buflen -1] << 8);
             //if (check_command_repeat(buffer, msg_type) && crc_receive == check_crc(buffer, buflen))
-            if (check_command_repeat(buffer, msg_type) && buffer[buflen -1] == 0x3f)
+            if (check_command_repeat(buffer, msg_type) && (crc_receive == check_crc(buffer, buflen) || buffer[buflen -1] == 0x3f))
              {
                 //printf("Check passed\n");
                 msg_orb_param_pro(buffer, msg_pd, msg_data, msg_hd, msg_type);
                 exyf_response_pack(msg_type, msg_hd);
-                return buflen;
+                //return buflen;
              }
-            else return -1;
+            //else return 0;
+            return buflen;
         }
     }
 
     name = "$EXEX";
     if (compare_buffer_n(buffer, (uint8_t*)name, 5))
     {
-        printf("Passing EXEF\n");
+        //printf("Passing EXEF\n");
         uint8_t buflen;
         //nread +=read_to_buff(buffer, 5, 7);
         //if (nread < 2) return nread;
         //if (!read_to_buff(buffer, 5, 7)) return;
         buflen = (uint16_t)buffer[5] + ((uint16_t)buffer[6]<<8);
+        if (data_len < buflen) return -1;
         //nread +=read_to_buff(buffer, 7, buflen);
         //if (nread == (buflen - 5))
         //if (read_to_buff(buffer, 7, buflen))
@@ -790,11 +796,13 @@ int find_r_type( uint8_t *buffer, MSG_orb_data *msg_data,  MSG_orb_pub *msg_pd,
         //if (check_command_repeat(buffer, msg_type) && buffer[buflen + 8] == 0x3f)
          {
             msg_orb_param_pro(buffer ,msg_pd, msg_data, msg_hd, msg_type);
-            return buflen;
+            //return buflen;
          }
-        else return -1;
+        //else return 0;
+        return buflen;
         }
     }
-    return -1;
+
+    return 0;
 }
 

@@ -147,7 +147,8 @@ set(msg_files
 	dg_vehicle_status.msg
 	dg_attitude.msg
 	dg_mission.msg
-	dg_voltage.msg	
+	dg_voltage.msg
+	follow_dg.msg	
 	)
 
 if(NOT EXTERNAL_MODULES_LOCATION STREQUAL "")

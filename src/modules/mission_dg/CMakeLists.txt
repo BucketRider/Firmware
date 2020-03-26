@@ -1,6 +1,6 @@
 ############################################################################
 #
-#   Copyright (c) 2015 PX4 Development Team. All rights reserved.
+#   Copyright (c) 2018 PX4 Development Team. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -31,25 +31,17 @@
 #
 ############################################################################
 px4_add_module(
-        MODULE modules__rw_uart
-        MAIN rw_uart
-        STACK_MAIN 6000
-        COMPILE_FLAGS
-                -Wno-double-promotion
-                -Wno-float-equal
-                -Wno-missing-declarations
-                -Wno-sign-compare
-                -Wno-unknown-warning-option
-                -Wno-unused-but-set-variable
-                -Wno-unused-result
-                -Wno-unused-variable
+        MODULE modules__mission_dg
+        MAIN mission_dg
+	COMPILE_FLAGS
+		-Wno-cast-align # TODO: fix and enable
+		-Wno-address-of-packed-member # TODO: fix in c_library_v2
+	INCLUDES
+		${PX4_SOURCE_DIR}/src/lib/ecl
+		${PX4_SOURCE_DIR}/mavlink/include/mavlink
 	SRCS
-                rw_uart.c
-                send.c
-                check_command_repeat.c
-                receive.c
-                msg_progress.c
+                mission_dg.cpp
 	DEPENDS
-                git_ecl
-                version
-	)
+		git_ecl
+		ecl_geo
+)

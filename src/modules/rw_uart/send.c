@@ -40,14 +40,7 @@ uint8_t get_frame(int data){
     return frame;
 }
 
-uint8_t get_control_status(uint16_t command, uint8_t nav_state){
-    if (command == 241){ //VEHICLE_CMD_PREFLIGHT_CALIBRATION
-        return 7;
-    }
-    else if (command == 242){//VEHICLE_CMD_PREFLIGHT_SET_SENSOR_OFFSETS
-        return 8;
-    }
-    else {
+uint8_t get_control_status(uint8_t nav_state){
         switch (nav_state) {
         case 0://NAVIGATION_STATE_MANUAL :
             return 0;
@@ -76,11 +69,13 @@ uint8_t get_control_status(uint16_t command, uint8_t nav_state){
         case 5://NAVIGATION_STATE_AUTO_RTL:
             return 11;
             break;
+        case 19:
+            return 13;
+            break;
         default:
             return 0xff;
             break;
     }
- }
 }
 
 uint8_t get_warnning (bool geofence_violated, uint8_t warning, bool rc_lost ){
@@ -118,9 +113,8 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->gps_num = stp_data.gps_data.satellites_used;
     stp->total_time = (uint16_t)(stp_data.gps_data.timestamp/1000000);
 
-    /*VEHICLE_CMD_NAV_WAYPOINT*/
-    stp->gps_wp_latitude = (stp_data.command_data.command == 16) ? (float_t)stp_data.command_data.param5 : NAN;
-    stp->gps_wp_longitude = (stp_data.command_data.command == 16) ? (float_t)stp_data.command_data.param6 : NAN;
+    stp->gps_wp_latitude = stp_data.position_setpoint_data.lat;
+    stp->gps_wp_longitude = stp_data.position_setpoint_data.lon;
 
     stp->wp_seq_low = (uint8_t)((stp_data.mission_data.seq_current+1) & 0x00ff);
     stp->wp_seq_high = (uint8_t)(((stp_data.mission_data.seq_current & 0xff00) +1) >> 8);
@@ -133,7 +127,7 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
          && stp_data.manual_data.mode_switch == 2)
         stp->control_status = 0x02;
     else
-        stp->control_status = get_control_status (stp_data.command_data.command, stp_data.status_data.nav_state);
+        stp->control_status = get_control_status (stp_data.status_data.nav_state);
 
     stp->rc_yaw = (uint8_t)(stp_data.manual_data.r * 50.0 + 150.0);
     stp->rc_y = (uint8_t)(stp_data.manual_data.y * 50.0 +150.0 );
@@ -151,7 +145,7 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
         param_get(param_hd, &paramf);
         stp->sp_y =(uint8_t)(stp_data.attitude_sp_data.roll_body *57.3/paramf* 50.0 + 150.0);
         stp->sp_x =(uint8_t)(stp_data.attitude_sp_data.pitch_body *57.3/paramf* 50.0 + 150.0);
-        stp->sp_z =(uint8_t)((1+ stp_data.attitude_sp_data.thrust_body[2])* 200.0);
+        stp->sp_z = stp_data.arm_data.armed ? (uint8_t)((1+ stp_data.attitude_sp_data.thrust_body[2])* 200.0) : (uint8_t)200;
         param_hd = param_find("MC_YAWRATE_MAX");
         param_get(param_hd, &paramf);
         stp->sp_yaw =(uint8_t)(stp_data.attitude_sp_data.yaw_sp_move_rate*57.3/paramf* 50.0 + 150.0);
@@ -159,8 +153,8 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
 
     stp->local_z_sp = -(int16_t)((stp_data.local_position_sp_data.z - stp_data.home_position_data.z)* 10.0) ;
 
-    float_t distance = (float_t) sqrtl((stp_data.local_position_data.z- stp_data.home_position_data.z) * (stp_data.local_position_data.z - stp_data.home_position_data.z)
-                                                  + (stp_data.local_position_data.x - stp_data.home_position_data.x)* (stp_data.local_position_data.x - stp_data.home_position_data.x)
+    float_t distance = (float_t) sqrtl(//(stp_data.local_position_data.z- stp_data.home_position_data.z) * (stp_data.local_position_data.z - stp_data.home_position_data.z) +
+                                                  (stp_data.local_position_data.x - stp_data.home_position_data.x)* (stp_data.local_position_data.x - stp_data.home_position_data.x)
                                                   + (stp_data.local_position_data.y - stp_data.home_position_data.y)* (stp_data.local_position_data.y -  stp_data.home_position_data.y));
     stp->distance_high8 =  (uint8_t)(distance/256.0);
     stp->distance_low8 = (uint8_t)(distance);
@@ -188,25 +182,6 @@ void stp_pack (STP *stp, MSG_orb_data stp_data){
     stp->local_roll =-(int32_t)(atan2f(2*(q0*q1 + q2*q3), 1 - 2*(q1*q1 + q2*q2)) /3.14159 *180);
     stp->local_pitch = -(int32_t)(-asinf(2*(q0*q2 - q3*q1)) /3.14159 *180);
     stp->gps_yaw = atan2f(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3));
-
-//    param_hd = param_find("RC3_MAX");
-//    param_get(param_hd, &paramf);
-//    stp->rc_throttle_mid = paramf;
-//    param_hd = param_find("RC3_MIN");
-//    param_get(param_hd, &paramf);
-//    stp->rc_throttle_mid = (uint8_t)((stp->rc_throttle_mid - paramf)/10 +100);
-
-//    param_hd = param_find("RC2_TRIM");
-//    param_get(param_hd, &paramf);
-//    stp->rc_pitch_mid =(uint8_t)(paramf/10);
-
-//    param_hd = param_find("RC1_TRIM");
-//    param_get(param_hd, &paramf);
-//    stp->rc_roll_mid =(uint8_t)(paramf/10);
-
-//    param_hd = param_find("RC4_TRIM");
-//    param_get(param_hd, &paramf);
-//    stp->rc_yaw_mid =(uint8_t)(paramf/10);
 
     stp->rc_throttle_mid = 150;
     stp->rc_pitch_mid = 150;
@@ -348,7 +323,7 @@ void yfpa_param_pack(YFPA_param *yfpa_param, MSG_param_hd msg_hd){
     param_get(msg_hd.battery_crit_hd, &paramf);
     //paramf = 3.50 + 0.55 *paramf;
     yfpa_param->battery_warn = ((uint8_t)((paramf - 3.54)/0.05))<<2;
-    printf("battery_warn is %d\n", yfpa_param->battery_warn);
+    //printf("battery_warn is %d\n", yfpa_param->battery_warn);
     param_get(msg_hd.battery_fail_hd, &paramd);
     int fail_act = 0;
     switch (paramd) {
@@ -388,7 +363,7 @@ void setd_pack_send (void){
     memcpy(send_message, wp_data.push, sizeof(SETD));
     send_message[26] = calculate_sum_check(send_message, sizeof(SETD));
     write(uart_read, send_message, sizeof(SETD));
-    printf("setd_pack_send finish \n");
+    //printf("setd_pack_send finish \n");
 }
 
 void exyf_response_pack(MSG_type msg_type, MSG_param_hd msg_hd){
@@ -476,7 +451,7 @@ void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
     dyd->head[2] = 'Y';
     dyd->head[3] = 'D';
 
-    // bit mask for sensor type is :  gyo 0 17 28| acc1 1 18 29| mag1 2 19 30| baro1 3 34 35| gps 31 32 33
+    // bit mask for sensor type is :  gyo 0 17 28| acc 1 18 29| mag 2 19 30| baro 3 34 35| gps 31 32 33
     uint64_t bit_mask =1;
 
     if (!(msg_data.status_data.onboard_control_sensors_present & bit_mask) ||
@@ -530,4 +505,7 @@ void dyd_pack(DYD *dyd, MSG_orb_data msg_data){
         {dyd->GPS_baro_status |= 0x04;}
 
     dyd->power_voltage = (uint16_t) (msg_data.dg_voltage_data.voltage_battery_filtered_v *100);
+    //printf("dg_voltage is %d\n", dyd->power_voltage);
+    //printf("dg_mag is %d\n", dyd->mag_status);
+
 }

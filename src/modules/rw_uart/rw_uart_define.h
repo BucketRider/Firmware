@@ -37,7 +37,7 @@
 #define WIFI_COMM_NOHEAD_OFF (uint8_t)150
 #define WIFI_COMM_RTK_RATIO_ON (uint8_t)151
 #define WIFI_COMM_RTK_RATIO_OFF (uint8_t)152
-#define WIFI_COMM_FOLLOW (uint8_t)153
+#define WIFI_COMM_FOLLOW_DG (uint8_t)153
 #define WIFI_COMM_ONE_MINUTE (uint8_t)201
 #define WIFI_COMM_POS_SAVE (uint8_t) 202
 #define WIFI_COMM_REBOOT (uint8_t) 203

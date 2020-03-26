@@ -13,7 +13,7 @@ static bool rw_uart_thread_running = false;		/**< px4_uart status flag */
 static pthread_mutex_t mutex;
 
 int uart_read;
-uint8_t param_saved[62];
+uint8_t param_saved[62] = {};
 Waypoint_saved wp_data;
 
 MSG_orb_sub msg_fd;
@@ -102,7 +102,8 @@ int set_rw_uart_baudrate(const int fd, unsigned int baud)
 
 int rw_uart_init (void)
 {
-       char *uart_name = "/dev/ttyS2";
+       //char *uart_name = "/dev/ttyS3";
+       char *uart_name = "/dev/ttyS1";
        int serial_fd = open(uart_name, O_RDWR | O_NONBLOCK | O_NOCTTY);
        //int serial_fd = open(uart_name, O_RDWR | O_NOCTTY);
         // 选项 O_NOCTTY 表示不能把本串口当成控制终端，否则用户的键盘输入信息将影响程序的执行
@@ -120,7 +121,7 @@ void msg_orb_sub (void)
     memset(&msg_fd, 0, sizeof(msg_fd));
     msg_fd.arm_fd = orb_subscribe(ORB_ID(actuator_armed));
     msg_fd.gps_fd = orb_subscribe(ORB_ID(vehicle_gps_position));
-    msg_fd.command_fd = orb_subscribe(ORB_ID(vehicle_command));
+    //msg_fd.command_fd = orb_subscribe(ORB_ID(vehicle_command));
     msg_fd.mission_fd = orb_subscribe(ORB_ID(mission_result));
     msg_fd.manual_fd = orb_subscribe(ORB_ID(manual_control_setpoint));
     msg_fd.status_fd = orb_subscribe(ORB_ID(vehicle_status));
@@ -136,6 +137,7 @@ void msg_orb_sub (void)
     msg_fd.attitude_sp_fd = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
     msg_fd.home_position_fd = orb_subscribe(ORB_ID(home_position));
     msg_fd.dg_voltage_fd = orb_subscribe(ORB_ID(dg_voltage));
+    msg_fd.position_setpoint_fd = orb_subscribe(ORB_ID(position_setpoint));
 }
 
 
@@ -143,7 +145,7 @@ void msg_orb_data(void)
 {
    orb_copy(ORB_ID(actuator_armed), msg_fd.arm_fd,&msg_data.arm_data);
    orb_copy(ORB_ID(vehicle_gps_position), msg_fd.gps_fd,&msg_data.gps_data);
-   orb_copy(ORB_ID(vehicle_command), msg_fd.command_fd,&msg_data.command_data);
+   //orb_copy(ORB_ID(vehicle_command), msg_fd.command_fd,&msg_data.command_data);
    orb_copy(ORB_ID(mission_result), msg_fd.mission_fd, &msg_data.mission_data);
    orb_copy(ORB_ID(manual_control_setpoint), msg_fd.manual_fd, &msg_data.manual_data);
    orb_copy(ORB_ID(vehicle_status), msg_fd.status_fd, &msg_data.status_data);
@@ -159,13 +161,14 @@ void msg_orb_data(void)
    orb_copy(ORB_ID(vehicle_attitude_setpoint), msg_fd.attitude_sp_fd, &msg_data.attitude_sp_data);
    orb_copy(ORB_ID(home_position), msg_fd.home_position_fd, &msg_data.home_position_data);
    orb_copy(ORB_ID(dg_voltage), msg_fd.dg_voltage_fd, &msg_data.dg_voltage_data);
+   orb_copy(ORB_ID(position_setpoint), msg_fd.position_setpoint_fd, &msg_data.position_setpoint_data);
 }
 
 void msg_orb_unsub (void)
 {
     orb_unsubscribe(msg_fd.arm_fd);
     orb_unsubscribe(msg_fd.gps_fd);
-    orb_unsubscribe(msg_fd.command_fd);
+    //orb_unsubscribe(msg_fd.command_fd);
     orb_unsubscribe(msg_fd.mission_fd);
     orb_unsubscribe(msg_fd.manual_fd);
     orb_unsubscribe(msg_fd.status_fd);
@@ -181,6 +184,7 @@ void msg_orb_unsub (void)
     orb_unsubscribe(msg_fd.attitude_sp_fd);
     orb_unsubscribe(msg_fd.home_position_fd);
     orb_unsubscribe(msg_fd.dg_voltage_fd);
+    orb_unsubscribe(msg_fd.position_setpoint_fd);
 }
 
 void msg_param_hd_cache (void)
@@ -207,6 +211,8 @@ void msg_param_hd_cache (void)
     msg_hd.throttle_hd = param_find("THR_MDL_FAC");
     msg_hd.up_vel_max_hd = param_find("MPC_Z_VEL_MAX_UP");
     msg_hd.xy_vel_max_hd = param_find("MPC_VEL_MANUAL");
+    msg_hd.xy_vel_max1_hd = param_find("MPC_XY_CRUISE");
+    msg_hd.xy_vel_max2_hd = param_find("MPC_XY_VEL_MAX");
     msg_hd.roll_rate_hd = param_find("MC_ROLLRATE_MAX");
     msg_hd.pitch_rate_hd = param_find("MC_PITCHRATE_MAX");
     msg_hd.yaw_rate_hd = param_find("MC_YAWRATE_MAX");
@@ -244,29 +250,29 @@ void wp_data_init(void)
     wp_data.speed_pre = (uint8_t)(paramf*10);
 }
 
-int read_to_buff(uint8_t *buffer, int start, int end)
-{
-    uint8_t data = 0;
-    int error_count = 0;
-    int  i = start;
-    for (; i < end;)
-    {
-        if (read(uart_read,&data,1) > 0){
-            buffer[i] = data;
-            printf("buffer[%d] is %x\n", i ,data);
-            i++;
-            error_count = 0;
-        }
-        else{
-            error_count++;
-        }
-        if (error_count > 10) {
-            //printf("buffer i is %d\n", i);
-            return (i - start);
-        }
-    }
-    return (i - start);
-}
+//int read_to_buff(uint8_t *buffer, int start, int end)
+//{
+//    uint8_t data = 0;
+//    int error_count = 0;
+//    int  i = start;
+//    for (; i < end;)
+//    {
+//        if (read(uart_read,&data,1) > 0){
+//            buffer[i] = data;
+//            //printf("buffer[%d] is %x\n", i ,data);
+//            i++;
+//            error_count = 0;
+//        }
+//        else{
+//            error_count++;
+//        }
+//        if (error_count > 10) {
+//            //printf("buffer i is %d\n", i);
+//            return (i - start);
+//        }
+//    }
+//    return (i - start);
+//}
 
 
 int rw_uart_main(int argc, char *argv[])
@@ -288,7 +294,7 @@ int rw_uart_main(int argc, char *argv[])
                 rw_uart_task = px4_task_spawn_cmd("rw_uart",
                         SCHED_DEFAULT,
                         SCHED_PRIORITY_DEFAULT,//调度优先级
-                        PX4_STACK_ADJUSTED(6000),//堆栈分配大小
+                        PX4_STACK_ADJUSTED(5000),//堆栈分配大小
                         rw_uart_thread_main,
                         (argv) ? (char *const *)&argv[2] : (char *const *)NULL);
                 return 0;
@@ -317,7 +323,7 @@ int rw_uart_main(int argc, char *argv[])
 
 static void *receive_loop(void *arg)
 {
-    uint8_t buffer[150] ={};
+    uint8_t buffer[300] ={};
     px4_pollfd_struct_t fds[1] = {
         { .fd = uart_read, .events = POLLIN }
     };
@@ -332,21 +338,30 @@ static void *receive_loop(void *arg)
        if (error_count >20) {
            remain = 0;
            error_count =0;
-       }
+           memset(buffer, 0, sizeof(buffer));
+        }
 
       if (error_count >0 || poll(&fds[0], 1, 20) > 0)
         {
-
+          usleep(error_count * 1000);
+          //printf("error_count is %d\n", error_count);
           nread= read(uart_read, &buffer[remain], sizeof(buffer) - (size_t)remain);
           if (nread < 0) nread =0;
 //           pthread_mutex_lock(&mutex);
           for ( read_finish = 0; read_finish < (nread + remain); ) {
-               if ((nread + remain - read_finish) < 30) break;
                if (buffer[read_finish] == '$'){
-                    find_type_finish = find_r_type(&buffer[read_finish], &msg_data, &msg_pd, msg_hd);
+                   if ((nread + remain - read_finish) < 5) {
+                       error_count++;
+                       break;
+                   }
+                    find_type_finish = find_r_type(&buffer[read_finish], nread + remain - read_finish,
+                                                               msg_data, &msg_pd, msg_hd);
                     if (find_type_finish < 0) {
                         error_count ++;
                         break;
+                    }
+                    else if (find_type_finish == 0){
+                        read_finish ++;
                     }
                     else {
                         read_finish += find_type_finish;
@@ -357,12 +372,16 @@ static void *receive_loop(void *arg)
                    read_finish++;
                }
             }
+
             remain = nread + remain - read_finish;
-            uint8_t buffer_move[150] = {};
+            uint8_t buffer_move[300] = {};
             memcpy(buffer_move, &buffer[read_finish], (size_t)remain);
             memcpy(buffer, buffer_move, sizeof(buffer_move));
         }
-    }
+//      else if (error_count == 0){
+//          memset(buffer, 0, sizeof(buffer));
+//      }
+   }
     return NULL;
 }
 
@@ -376,7 +395,7 @@ void receive_start(pthread_t *thread)
     param.sched_priority = SCHED_PRIORITY_MAX - 80;
     (void)pthread_attr_setschedparam(&receiveloop_attr, &param);
 
-    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(6000));
+    pthread_attr_setstacksize(&receiveloop_attr, PX4_STACK_ADJUSTED(5000));
     pthread_create(thread, &receiveloop_attr, receive_loop, NULL);
 
     pthread_attr_destroy(&receiveloop_attr);
@@ -412,7 +431,7 @@ int rw_uart_thread_main(int argc, char *argv[])
 
         wp_data_init();
 
-        memset(param_saved, 0, sizeof(param_saved));
+        //memset(param_saved, 0, sizeof(param_saved));
         msg_param_saved_get(msg_hd);
 
         pthread_mutex_init(&mutex, NULL);
@@ -424,7 +443,7 @@ int rw_uart_thread_main(int argc, char *argv[])
         receive_start(&receive_thread);
 
         //last_time_send = hrt_absolute_time();
-        printf("%s\n", __DATE__);
+        //printf("%s\n", __DATE__);
 
         while (!rw_thread_should_exit)
         {

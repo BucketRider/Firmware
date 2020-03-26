@@ -82,6 +82,8 @@ private:
 		FOLLOW_FROM_LEFT
 	};
 
+    orb_advert_t    _follow_target_pub{nullptr};
+
 	static constexpr float _follow_position_matricies[4][9] = {
 		{ 1.0F, -1.0F, 0.0F,  1.0F,  1.0F, 0.0F, 0.0F, 0.0F, 1.0F}, // follow right
 		{-1.0F,  0.0F, 0.0F,  0.0F, -1.0F, 0.0F, 0.0F, 0.0F, 1.0F}, // follow behind
@@ -119,7 +121,8 @@ private:
 
 	float _yaw_rate{0.0f};
 	float _responsiveness{0.0f};
-	float _yaw_angle{0.0f};
+    float _yaw_angle{0.0f};
+    //float _yaw_angle{NAN};
 
 	// Mavlink defined motion reporting capabilities
 	enum {

@@ -1840,7 +1840,7 @@ Mavlink::task_main(int argc, char *argv[])
 	int ch;
 	_baudrate = 57600;
 	_datarate = 0;
-    _mode = MAVLINK_MODE_COUNT;
+	_mode = MAVLINK_MODE_NORMAL;
 	bool _force_flow_control = false;
 
 	_interface_name = nullptr;
@@ -1897,11 +1897,6 @@ Mavlink::task_main(int argc, char *argv[])
 		case 'd':
 			_device_name = myoptarg;
 			set_protocol(SERIAL);
-
-            if (access(_device_name, F_OK) == -1) {
-                PX4_ERR("Device %s does not exist", _device_name);
-                err_flag = true;
-                }
 			break;
 
 		case 'n':
@@ -2066,23 +2061,6 @@ Mavlink::task_main(int argc, char *argv[])
 		return PX4_ERROR;
 	}
 
-    if (strcmp(_device_name, "/dev/ttyACM0") == OK || strcmp(_device_name, "/dev/ttyACM1") == OK) {
-        if (_datarate == 0) {
-            _datarate = 800000;
-        }
-
-        if (_mode == MAVLINK_MODE_COUNT) {
-            _mode = MAVLINK_MODE_CONFIG;
-        }
-
-        _ftp_on = true;
-        _is_usb_uart = true;
-    }
-
-    if (_mode == MAVLINK_MODE_COUNT) {
-            _mode = MAVLINK_MODE_NORMAL;
-        }
-
 	if (_datarate == 0) {
 		/* convert bits to bytes and use 1/2 of bandwidth by default */
 		_datarate = _baudrate / 20;
@@ -2104,17 +2082,17 @@ Mavlink::task_main(int argc, char *argv[])
 		/* flush stdout in case MAVLink is about to take it over */
 		fflush(stdout);
 
-//		/* default values for arguments */
-//		_uart_fd = mavlink_open_uart(_baudrate, _device_name, _force_flow_control);
+		/* default values for arguments */
+		_uart_fd = mavlink_open_uart(_baudrate, _device_name, _force_flow_control);
 
-//		if (_uart_fd < 0 && _mode != MAVLINK_MODE_CONFIG) {
-//			PX4_ERR("could not open %s", _device_name);
-//			return PX4_ERROR;
+		if (_uart_fd < 0 && _mode != MAVLINK_MODE_CONFIG) {
+			PX4_ERR("could not open %s", _device_name);
+			return PX4_ERROR;
 
-//		} else if (_uart_fd < 0 && _mode == MAVLINK_MODE_CONFIG) {
-//			/* the config link is optional */
-//			return OK;
-//		}
+		} else if (_uart_fd < 0 && _mode == MAVLINK_MODE_CONFIG) {
+			/* the config link is optional */
+			return OK;
+		}
 
 	} else if (get_protocol() == UDP) {
 		if (Mavlink::get_instance_for_network_port(_network_port) != nullptr) {
@@ -2160,7 +2138,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 	MavlinkOrbSubscription *mavlink_log_sub = add_orb_subscription(ORB_ID(mavlink_log));
 
-    struct vehicle_status_s status = {};
+	struct vehicle_status_s status;
 	status_sub->update(&status_time, &status);
 
 	/* Activate sending the data by default (for the IRIDIUM mode it will be disabled after the first round of packages is sent)*/
@@ -2205,20 +2183,6 @@ Mavlink::task_main(int argc, char *argv[])
 	/* now the instance is fully initialized and we can bump the instance count */
 	LL_APPEND(_mavlink_instances, this);
 
-    /* open the UART device after setting the instance, as it might block */
-    if (get_protocol() == Protocol::SERIAL) {
-        _uart_fd = mavlink_open_uart(_baudrate, _device_name, _force_flow_control);
-
-        if (_uart_fd < 0 && !_is_usb_uart) {
-            PX4_ERR("could not open %s", _device_name);
-            return PX4_ERROR;
-
-        } else if (_uart_fd < 0 && _is_usb_uart) {
-            /* the config link is optional */
-            return PX4_OK;
-        }
-    }
-
 	/* init socket if necessary */
 	if (get_protocol() == UDP) {
 		init_udp();
@@ -2240,7 +2204,7 @@ Mavlink::task_main(int argc, char *argv[])
 		perf_count(_loop_interval_perf);
 		perf_begin(_loop_perf);
 
-        //orb_check(_dg_mission_sub, &_dg_mission_updated);
+        orb_check(_dg_mission_sub, &_dg_mission_updated);
         if (_dg_mission_updated){
             mavlink_message_t msg_empty ={};
             orb_copy(ORB_ID(dg_mission), _dg_mission_sub, &dg_manager.dg_mission);

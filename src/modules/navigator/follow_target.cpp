@@ -51,6 +51,7 @@
 #include <uORB/uORB.h>
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/follow_target.h>
+#include <uORB/topics/follow_dg.h>
 #include <lib/ecl/geo/geo.h>
 #include <lib/mathlib/math/Limits.hpp>
 
@@ -101,7 +102,7 @@ void FollowTarget::on_active()
 	struct map_projection_reference_s target_ref;
 	follow_target_s target_motion_with_offset = {};
 	uint64_t current_time = hrt_absolute_time();
-    //bool _radius_entered = false;
+    bool _radius_entered = false;
 	bool _radius_exited = false;
 	bool updated = false;
 	float dt_ms = 0;
@@ -173,7 +174,7 @@ void FollowTarget::on_active()
 			// a chance to catch up
 
 			_radius_exited = ((_target_position_offset + _target_distance).length() > (float) TARGET_ACCEPTANCE_RADIUS_M * 1.5f);
-            //_radius_entered = ((_target_position_offset + _target_distance).length() < (float) TARGET_ACCEPTANCE_RADIUS_M);
+            _radius_entered = ((_target_position_offset + _target_distance).length() < (float) TARGET_ACCEPTANCE_RADIUS_M);
 
 			// to keep the velocity increase/decrease smooth
 			// calculate how many velocity increments/decrements
@@ -183,8 +184,16 @@ void FollowTarget::on_active()
 			// just traveling at the exact velocity of the target will not
 			// get any closer or farther from the target
 
+//            if (_radius_entered){
+//                _step_vel = _est_target_vel - _current_vel;
+//                _step_vel /= ((float) INTERPOLATION_PNTS);
+
+//            } else
+            {
 			_step_vel = (_est_target_vel - _current_vel) + (_target_position_offset + _target_distance) * FF_K;
 			_step_vel /= (dt_ms / 1000.0F * (float) INTERPOLATION_PNTS);
+            }
+
 			_step_time_in_ms = (dt_ms / (float) INTERPOLATION_PNTS);
 
 			// if we are less than 1 meter from the target don't worry about trying to yaw
@@ -209,18 +218,36 @@ void FollowTarget::on_active()
 			}
 		}
 
-//		warnx(" _step_vel x %3.6f y %3.6f cur vel %3.6f %3.6f tar vel %3.6f %3.6f dist = %3.6f (%3.6f) mode = %d yaw rate = %3.6f",
-//				(double) _step_vel(0),
-//				(double) _step_vel(1),
-//				(double) _current_vel(0),
-//				(double) _current_vel(1),
-//				(double) _est_target_vel(0),
-//				(double) _est_target_vel(1),
-//				(double) (_target_distance).length(),
-//				(double) (_target_position_offset + _target_distance).length(),
-//				_follow_target_state,
-//				(double) _yaw_rate);
-	}
+        struct follow_dg_s follow_msg;
+        follow_msg.timestamp = hrt_absolute_time();
+        follow_msg.step_vel[0] = _step_vel(0);
+        follow_msg.step_vel[1] = _step_vel(1);
+        follow_msg.current_vel[0] = _current_vel(0);
+        follow_msg.current_vel[1] = _current_vel(1);
+        follow_msg.est_target_vel[0] = _est_target_vel(0);
+        follow_msg.est_target_vel[1] = _est_target_vel(1);
+        follow_msg.target_distance = (_target_distance).length();
+        follow_msg.target_distance_with_offset = (_target_position_offset + _target_distance).length();
+        follow_msg.follow_target_state =_follow_target_state;
+        follow_msg.yaw_rate = _yaw_rate;
+        follow_msg.yaw_angle = _yaw_angle;
+        follow_msg.enable = true;
+
+        int inst;
+        orb_publish_auto(ORB_ID(follow_dg), &_follow_target_pub, &follow_msg, &inst, ORB_PRIO_DEFAULT);
+
+//        warnx(" _step_vel x %3.6f y %3.6f cur vel %3.6f %3.6f tar vel %3.6f %3.6f dist = %3.6f (%3.6f) mode = %d yaw rate = %3.6f",
+//                (double) _step_vel(0),
+//                (double) _step_vel(1),
+//                (double) _current_vel(0),
+//                (double) _current_vel(1),
+//                (double) _est_target_vel(0),
+//                (double) _est_target_vel(1),
+//                (double) (_target_distance).length(),
+//                (double) (_target_position_offset + _target_distance).length(),
+//                _follow_target_state,
+//                (double) _yaw_rate);
+    }
 
 	if (target_position_valid()) {
 
@@ -246,10 +273,10 @@ void FollowTarget::on_active()
 
 	case TRACK_POSITION: {
 
-            /*if (_radius_entered == true) {
+            if (_radius_entered == true) {
 				_follow_target_state = TRACK_VELOCITY;
 
-            } else */if (target_velocity_valid()) {
+            } else if (target_velocity_valid()) {
 				set_follow_target_item(&_mission_item, _param_nav_min_ft_ht.get(), target_motion_with_offset, _yaw_angle);
 				// keep the current velocity updated with the target velocity for when it's needed
 				_current_vel = _est_target_vel;
@@ -299,7 +326,8 @@ void FollowTarget::on_active()
 			target.lon = _navigator->get_global_position()->lon;
 			target.alt = 0.0F;
 
-			set_follow_target_item(&_mission_item, _param_nav_min_ft_ht.get(), target, _yaw_angle);
+            //set_follow_target_item(&_mission_item, _param_nav_min_ft_ht.get(), target, _yaw_angle);
+            set_follow_target_item(&_mission_item, _param_nav_min_ft_ht.get(), target, NAN);
 
 			update_position_sp(false, false, _yaw_rate);
 
@@ -338,8 +366,10 @@ void FollowTarget::update_position_sp(bool use_velocity, bool use_position, floa
 	pos_sp_triplet->current.vx = _current_vel(0);
 	pos_sp_triplet->current.vy = _current_vel(1);
 	pos_sp_triplet->next.valid = false;
-	pos_sp_triplet->current.yawspeed_valid = PX4_ISFINITE(yaw_rate);
-	pos_sp_triplet->current.yawspeed = yaw_rate;
+    //pos_sp_triplet->current.yawspeed_valid = PX4_ISFINITE(yaw_rate);
+    pos_sp_triplet->current.yawspeed_valid = false;
+    //pos_sp_triplet->current.yawspeed = yaw_rate;
+    pos_sp_triplet->current.yawspeed = NAN;
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
@@ -385,14 +415,15 @@ FollowTarget::set_follow_target_item(struct mission_item_s *item, float min_clea
 		/* use current target position */
 		item->lat = target.lat;
 		item->lon = target.lon;
-		item->altitude = _navigator->get_home_position()->alt;
+        item->altitude = _navigator->get_home_position()->alt;
+//        item->altitude = _navigator->get_global_position()->alt;
 
-		if (min_clearance > 8.0f) {
-			item->altitude += min_clearance;
+        if (min_clearance > 8.0f) {
+            item->altitude += min_clearance;
 
-		} else {
-			item->altitude += 8.0f; // if min clearance is bad set it to 8.0 meters (well above the average height of a person)
-		}
+        } else {
+            item->altitude += 8.0f; // if min clearance is bad set it to 8.0 meters (well above the average height of a person)
+        }
 	}
 
 	item->altitude_is_relative = false;

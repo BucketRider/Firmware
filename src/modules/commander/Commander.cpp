@@ -3068,7 +3068,7 @@ Commander::set_main_state_rc(const vehicle_status_s &status_local, bool *changed
 //                                    if (sp_man.mode_switch==manual_control_setpoint_s::SWITCH_POS_ON)
 //                                          new_mode=commander_state_s::MAIN_STATE_AUTO_RTL;
 //                                    else
-                                          new_mode=commander_state_s::MAIN_STATE_POSCTL;
+                                          new_mode=commander_state_s::MAIN_STATE_AUTO_FOLLOW_TARGET;
                                      break;
                                default:
                                    return TRANSITION_DENIED;

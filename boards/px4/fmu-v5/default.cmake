@@ -14,9 +14,9 @@ px4_add_board(
 	SERIAL_PORTS
 		GPS1:/dev/ttyS0
 		GPS2:/dev/ttyS1
-		TEL1:/dev/ttyS3
+		#TEL1:/dev/ttyS3
 		#TEL2:/dev/ttyS1
-		#TEL4:/dev/ttyS2
+		TEL1:/dev/ttyS2
 
 	DRIVERS
 		barometer # all available barometer drivers
@@ -90,6 +90,8 @@ px4_add_board(
 		vtol_att_control
 		wind_estimator
 		rw_uart
+		follow_dg
+		mission_dg
 		#send_position
 
 	SYSTEMCMDS

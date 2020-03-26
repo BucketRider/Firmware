@@ -116,6 +116,8 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
         //paramf = (float_t)data / 15.0 + 3.0;
         paramf = (float_t)data / 10.0;
         param_set(msg_hd.xy_vel_max_hd, &paramf);
+        param_set(msg_hd.xy_vel_max1_hd, &paramf);
+        param_set(msg_hd.xy_vel_max2_hd, &paramf);
         break;
     case 23:
         paramf = (float_t)data;
@@ -218,7 +220,7 @@ bool change_param (MSG_param_hd msg_hd, uint8_t data, int i){
         changed = false;
         break;
     }
-    printf("Passing change, changed is %d, i is %d\n", changed, i);
+    //printf("Passing change, changed is %d, i is %d\n", changed, i);
     return changed;
 }
 
@@ -240,11 +242,11 @@ bool yfwi_param_set(const uint8_t *buffer, MSG_param_hd msg_hd){
         float_t paramf = (float_t)dist_max;
         param_set(msg_hd.dist_max_hd, &paramf);
         changed = true;
-        printf("dist_max changed\n");
+        //printf("dist_max changed\n");
     }
 
     for (int i = 8; i < 60; i++) {
-        printf("i : %d, buffer[i] : %x, param_saved[i]: %x\n", i, buffer[i], param_saved[i]);
+        //printf("i : %d, buffer[i] : %x, param_saved[i]: %x\n", i, buffer[i], param_saved[i]);
         //if (buffer[i] != param_saved[i])
         if (abs(buffer[i] != param_saved[i]))
         {
